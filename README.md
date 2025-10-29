@@ -6,7 +6,8 @@
 
 ```powershell
 # 進入專案資料夾
-cd "C:\Users\<你的名字>\icook_crawler_docker_auto_yesterday_v5A_internal"
+
+cd "C:\Users\<你的名字>\TJR103-Group04"
 
 # 建立映像檔
 docker build -t icook-crawler-internal .
