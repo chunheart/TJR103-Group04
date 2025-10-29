@@ -125,7 +125,7 @@ def match_num_with_digit(matches) -> float | Decimal | str | None:
     for m in matches: # activate this iterate generator
         try:
             """when value is presented as an integer or an integer with decimal, such as 1 or 1.5"""
-            number_part = Decimal(m.group(1))
+            number_part = float(m.group(1))
             return number_part
 
         except ValueError:
@@ -220,9 +220,9 @@ def match_unit_in_field_quantity(matches) -> str | None:
         return m.group(2)
     return None
 
-# "1/3公斤", , "三分之二公斤"
+# 1/3公斤", "1.5kg", "1公斤", "一公斤",
 def test():
-    text = ["1.5公斤",  "三公斤", "1kg"]
+    text = ["三分之一公斤"]
     for text in text:
         matches = COMPILED_PATTERN_WITH_NUMBERS.finditer(text)
         print("=" * 30)
