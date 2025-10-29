@@ -1,9 +1,9 @@
 [tool.poetry]
-name = "icook-crawler"
+name = "recipe_carbon_emission"
 version = "0.1.0"
-description = "iCook 食譜自動爬蟲（每日排程版）"
+description = "食譜碳排計算器"
 authors = ["Your Name <you@example.com>"]
-readme = "README_PowerShell_Docker.md"
+readme = "README.md"
 
 [tool.poetry.dependencies]
 python = "^3.11"
