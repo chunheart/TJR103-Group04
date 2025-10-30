@@ -11,7 +11,10 @@ Basically, The data type of the number part is decimal; the unit part is string
 """The below is constant"""
 PATTERN_STR_VERBOSE_WITH_NUMBERS = r"""
     ( # Group 1: 捕獲整個「數字」部分
-        (?:(?:.*)+分之(?:.*))                            # 中文表達分數 (e.g., 三分之二)
+        (?:[一二三四五六七八九十百千萬]+)分之(?:[一二三四五六七八九十百千萬]+)     # 中文表達分數 (e.g., 三分之二)
+        |
+        ((?:[一二三四五六七八九十百千萬]+)分之(?:[一二三四五六七八九十百千萬]+)[-~～]?(?:[一二三四五六七八九十百千萬]+)分之(?:[一二三四五六七八九十百千萬]+))
+        # 中文表達分數區間 (e.g., 三分之一 -~～ 三分之二)
         |
         (?:\d+(?:\.\d+)?)[~-](?:\d+(?:\.\d+)?)          # 範圍 (e.g., 2-3)
         | 
@@ -125,7 +128,7 @@ def match_num_with_digit(matches) -> float | Decimal | str | None:
     for m in matches: # activate this iterate generator
         try:
             """when value is presented as an integer or an integer with decimal, such as 1 or 1.5"""
-            number_part = float(m.group(1))
+            number_part = Decimal(float(m.group(1)))
             return number_part
 
         except ValueError:
