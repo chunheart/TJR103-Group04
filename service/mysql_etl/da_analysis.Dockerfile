@@ -6,7 +6,7 @@ EXPOSE 8888
 ENV JUPYTER_TOKEN=mytoken123
 
 # 系統依賴（視你的套件需求調整）
-RUN apt-get update && apt-get install -y --no-install-recommends build-essential vim curl \
+RUN apt-get update && apt-get install -y --no-install-recommends build-essential vim curl git \
   && rm -rf /var/lib/apt/lists/*
 
 # 安裝 jupyter 與你要的科學套件
