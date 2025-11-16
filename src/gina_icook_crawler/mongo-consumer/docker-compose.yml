@@ -1,0 +1,20 @@
+version: '3.9'
+
+services:
+  mongo-consumer:
+    build: .
+    container_name: mongo-consumer
+    restart: always
+    command: python consumer_mongo.py
+    volumes:
+      - ./logs:/app/logs          # ✅ 新增：讓容器內 /app/logs 持久化到宿主機
+    networks:
+      - kafka_kafka-net           # ✅ 讓它能讀 Kafka
+      - mongodb_default           # ✅ 讓它能連 Mongo
+
+networks:
+  kafka_kafka-net:
+    external: true                # 這是 Kafka 的網路
+  mongodb_default:
+    external: true                # 這是 MongoDB 的網路
+
