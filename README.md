@@ -26,3 +26,16 @@ git
 ## 二、Features
 ### 🍳 iCook Crawler - Docker 自動排程版 (v5A Internal)
 本版本會每天 09:00 自動抓取「前一天」的 iCook 食譜資料，並將結果存放於容器內 `/app/data/`。
+
+
+## 三、mysql-etl 環境設置
+```shell
+# Build python container
+docker build -f service/mysql_etl/da_analysis.Dockerfile -t py_analysis:latest .
+
+# start containers: mysql, python
+docker-compose -f service/mysql_etl/docker-compose.yaml up -d
+
+# close containers
+docker-compose -f service/mysql_etl/docker-compose.yaml down
+```
