@@ -1,3 +1,6 @@
+# airflow (DO NOT track logs)
+service/mysql_etl/logs/
+
 # locally devlop
 local/
 
