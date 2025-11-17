@@ -16,6 +16,7 @@ scrapy = "^2.13.3"
 pathlib = "^1.0.1"
 confluent-kafka = "^2.12.2"
 python-dotenv = "^1.2.1"
+google-genai = "^1.50.1"
 
 [build-system]
 requires = ["poetry-core"]

@@ -39,8 +39,18 @@ DETAIL_CRAWL_DELAY = 1.5  # Delay between fetching detail pages (sec)
 
 # Defines the columns for the output CSV file
 CSV_FIELDNAMES = [
-    'ID', 'Recipe_Title', 'Author', 'Likes', 'Recipe_URL', 'Type', 
-    'Ingredient_Name', 'Weight', 'Unit', 'Publish_Date', 'Crawl_Time'
+    'ID', 
+    'Recipe_Title', 
+    'Author', 
+    'Recipe_URL', 
+    'Servings',       
+    'Type', 
+    'Ingredient_Name', 
+    'Weight', 
+    'Unit', 
+    'Publish_Date', 
+    'Crawl_Time', 
+    'site'             
 ]
 
 # ====================================================================
