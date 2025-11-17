@@ -104,6 +104,7 @@ def test_main():
     my_df = carboncloud_crawler(query_list=['tofu','bagel'])
     print(my_df.shape)
     print(my_df.head())
+    my_df.to_csv('carboncloud_demo.csv',index=False)
 
 
 if __name__ == "__main__":
