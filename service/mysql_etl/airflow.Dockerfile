@@ -1,5 +1,9 @@
 FROM apache/airflow:2.11.0-python3.12
 
+### SETTING
+# ENV AIRFLOW__WEBSERVER__SHOW_TRIGGER_FORM_IF_NO_PARAMS=true
+
+
 ### init airflow & create user
 # RUN airflow standalone
 RUN airflow db init
@@ -11,9 +15,11 @@ RUN airflow users create \
     --role Admin \
     --email your_email@example.com
 
+
 ### USER PERMISSION ISSUE?
 # RUN apt-get update && apt-get install -y --no-install-recommends build-essential vim curl git \
 #   && rm -rf /var/lib/apt/lists/*
+
 
 ### Try to use requirement.txt later [COPY ...]
 RUN pip install --upgrade pip

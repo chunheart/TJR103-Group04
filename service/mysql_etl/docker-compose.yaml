@@ -44,13 +44,14 @@ services:
     depends_on:
       - mysql
     volumes:
-      - $PWD/service/mysql_etl/dags:/opt/airflow/dags
-      - $PWD/service/mysql_etl/logs:/opt/airflow/logs
-      - $PWD/service/mysql_etl/utils:/opt/airflow/utils
-      - $PWD/service/mysql_etl/tasks:/opt/airflow/tasks
+      - $PWD/airflow/dags:/opt/airflow/dags
+      - $PWD/airflow/logs:/opt/airflow/logs
+      - $PWD/airflow/utils:/opt/airflow/utils
+      - $PWD/airflow/tasks:/opt/airflow/tasks
       - $PWD/src:/opt/airflow/src
     environment:
       PYTHONPATH: "/opt/airflow/src"
+      AIRFLOW__WEBSERVER__SHOW_TRIGGER_FORM_IF_NO_PARAMS: "true"
 
 volumes:
   mysql_data:
