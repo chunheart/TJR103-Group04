@@ -11,6 +11,7 @@ Bash
 poetry run python3 src/kevin_ytower_crawler/main.py
 執行後，爬蟲會自動執行以下動作：
 
+
 ## 進入 Scrapy 專案環境。
 ## 開始爬取設定好的分類頁面。
 將結果輸出至 ytower_csv_output/ 資料夾。
