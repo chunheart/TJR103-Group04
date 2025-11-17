@@ -1,5 +1,5 @@
 # airflow (DO NOT track logs)
-service/mysql_etl/logs/
+airflow/logs/
 
 # locally devlop
 local/

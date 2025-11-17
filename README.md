@@ -29,8 +29,8 @@ git
 
 
 ## 三、mysql-etl 環境設置
-* 以下指令，透過 docker-compose 建立 airflow, mysql container
-* airflow container mount airflow/ 下的目錄
+* 以下指令，透過 docker-compose 建立 airflow(py), mysql container
+* airflow(py) container mount airflow/ 下的目錄
 ```shell
 # Build python container
 # docker build -f service/mysql_etl/da_analysis.Dockerfile -t py_analysis:latest .
