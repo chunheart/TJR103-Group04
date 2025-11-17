@@ -16,6 +16,8 @@ from bs4 import BeautifulSoup
 DATE_REGEX= "%Y/%m/%d"
 MAIN = "main ingredients"
 SAUCE = "sauce"
+RECIPE_SCOURECE = "icook"
+
 
 class IcookCategorySpider(scrapy.Spider):
     name = "icook_daily" # spider's name
@@ -144,6 +146,7 @@ class Food:
                  ingredients=None,  # list | None
                  quantity=None,  # int | None
                  unit=None,  # str | None
+                 recipe_source=RECIPE_SCOURECE,
                  recipe_upload_date=None,  # datetime | None
                  crawl_datetime=datetime.now(),  # datetime | None
                  ):
@@ -159,6 +162,7 @@ class Food:
         self.ingredients = ingredients  # cooking ingredients
         self.quantity = quantity
         self.unit = unit
+        self.recipe_source = recipe_source
         self.recipe_upload_date = recipe_upload_date  # recipe_upload_date
         self.crawl_datetime = crawl_datetime
 
@@ -259,6 +263,7 @@ class Food:
                         ingredients=ing_name,
                         quantity=quantity,
                         unit=unit,
+                        recipe_source=RECIPE_SCOURECE,
                         recipe_upload_date=upload_date,
                         crawl_datetime=crawl_datetime,
                     )
@@ -287,6 +292,7 @@ class Food:
                         ingredients=ing_name,
                         quantity=quantity,
                         unit=unit,
+                        recipe_source=RECIPE_SCOURECE,
                         recipe_upload_date=upload_date,
                         crawl_datetime=crawl_datetime,
                     )
