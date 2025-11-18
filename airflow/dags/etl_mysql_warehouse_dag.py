@@ -90,12 +90,26 @@ def etl_mysql_warehouse():
             print('[DONE] insert into unit_normalize')
             myetl.register_recipe_ingredient(my_conn, res)
             print('[DONE] insert into recipe_ingredient')
+        return res
 
+    @task
+    def update_normalize_recipe(res):
+        """
+        TBA
+        """
+        with myetl.get_mysql_connection(
+            host='mysql',port=3306,user='root',password='pas4word',db='EXAMPLE',
+        ) as my_conn:
+            myetl.update_unit_w_u2g(my_conn)
+            myetl.update_ingredient_w_normalize(my_conn)
+            myetl.register_coemission_from_recipe(my_conn,res)
+            myetl.update_coemission_w_query(my_conn)
+            
 
     res1 = get_recipe_data()
     res2 = clean_recipe_data(res1)
-    insert_recipe_into_mysql(res2)
-
+    res3 = insert_recipe_into_mysql(res2)
+    update_normalize_recipe(res3)
 
 
 etl_mysql_warehouse()

@@ -56,11 +56,9 @@ def query_coemission(nor_ingredient_name: str) -> dict | None:
     查詢碳排係數，回 dict 或 None。
     範例回傳結構：{'coe_source': 'FAO', 'coe_category': 'Vegetable', 'weight_g2g': 0.25}
     """
-    demo = {
-        "黑豆": {"coe_source": "FAO", "coe_category": "Legume", "weight_g2g": 0.6},
-        "水":   {"coe_source": "FAO", "coe_category": "Water",  "weight_g2g": 0.0},
-    }
-    return demo.get(nor_ingredient_name)
+    # res = my_crawl()
+    res = {'coe_source': 'carboncloud', 'coe_category': 'some food', 'weight_g2g': random.uniform(0,50)}
+    return res
 
 def get_where_in_string(a, warp_with_string=True):
     """transform an array into a string of where-in expr"""
@@ -647,14 +645,11 @@ def register_unit(conn, recipe_json: list[dict]):
 
 def register_coemission_from_recipe(conn, recipe_json: list[dict]):
     """
-    1) carbon_emission upsert：
-       - 以正規化名稱為 key 檢查是否存在
-       - 若沒有則 translate() + query_coemission() 後寫入
-       Schema 調整：使用 id 作 PK + nor_ingredient_name UNIQUE
+    1) find normalized ingredient that should be queried for coemission (query later)
+    2) insert 
     """
     
-    ### 正規化名稱 from ingredients
-    # call get_normalize() or query DB
+    ### 1. get noramalized name from ingredients
     names = {row.get('ingredient_name') for row in recipe_json if row.get("ingredient_name")}
     if not names:
         print('No valid data received')
@@ -667,8 +662,9 @@ def register_coemission_from_recipe(conn, recipe_json: list[dict]):
             """
         cur.execute(sql)
         nor_names = {r["nor_ingredient_name"] for r in cur.fetchall()}
-    
-    ### check nor_names in carbon_emission
+    print(nor_names)
+
+    ### 2. get noramalized name not in carbon_emission
     with conn.cursor() as cur:
         sql = f"""
             SELECT nor_ingredient_name 
@@ -677,24 +673,26 @@ def register_coemission_from_recipe(conn, recipe_json: list[dict]):
             """
         cur.execute(sql)
         exists_nor_names = {r["nor_ingredient_name"] for r in cur.fetchall()}
-
     query_nor_names = {n for n in nor_names if n not in exists_nor_names}
     if not query_nor_names:
-        print('No unexisting nor_ingredient in carbon_emission')
+        print('All corresponding names have at least 1 coemission ref.')
         return
+    print(query_nor_names)
 
-    ### query carbon_emission
-    # -- delay and deal with this later
-    ins_nor_names = [('carboncloud',name,None,None,None,None,'pending') for name in query_nor_names]
-
-    ### insert carbon_emission
+    ### 3. insert carbon_emission
+    insert_values = [(
+        'TBA', name, None, None, None, None, 'pending'
+    )
+    for name in query_nor_names]
     sql_ins = """
     INSERT INTO `carbon_emission`
       (`coe_source`,`nor_ingredient_name`,`publish_time`,`crawl_time`,`coe_category`,`weight_g2g`,`coe_status`)
     VALUES (%s, %s, %s, %s, %s, %s, %s)
+    ON DUPLICATE KEY UPDATE
+    nor_ingredient_name = nor_ingredient_name;
     """
     with conn.cursor() as cur:                        
-        cur.executemany(sql_ins, ins_nor_names)
+        cur.executemany(sql_ins, insert_values)
         conn.commit()
 
 
@@ -850,7 +848,7 @@ def update_unit_w_u2g(conn):
         cur.execute(sql)
         rows = cur.fetchall()
         if not rows:
-            print("[Task4] No pending ingr-unit pair to normalize.")
+            print("No pending ingr-unit pair to normalize.")
             return
         print(f"Found {len(rows)} pending rows")
     
@@ -873,6 +871,59 @@ def update_unit_w_u2g(conn):
         SET weight_grams = %s,
             u2g_status = %s
         WHERE ori_ingredient_id = %s and unit_name = %s;
+        """
+        cur.executemany(sql,update_values)
+        print(f"total rows to update: {len(update_values)}; affected rows: {cur.rowcount}")
+        conn.commit()
+
+
+def update_coemission_w_query(conn):
+    """
+    Update (normalized) ingredient's coemission
+    - by crawl data from carboncloud
+    """
+
+    ### 1. get records to be updated (status = 'pending')
+    with conn.cursor() as cur:
+        sql ="""
+        select coe_source, nor_ingredient_name
+        from carbon_emission
+        where coe_status='pending' and coe_source='TBA';
+        """
+        cur.execute(sql)
+        rows = cur.fetchall()
+        if not rows:
+            print("No pending ingredient to normalize.")
+            return
+        print(f"Found {len(rows)} pending rows")
+    
+    ### 2. query coemission
+    update_values = []
+    for row in rows:
+        coe_values = query_coemission(row["nor_ingredient_name"])
+        if coe_values is None:
+            new_status = "error"
+        else:
+            new_status = "done"
+        update_values.append((
+            coe_values['coe_source'],
+            coe_values['coe_category'],
+            coe_values['weight_g2g'],
+            dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            new_status, 
+            row["nor_ingredient_name"]
+        ))
+    
+    ### 3. update
+    with conn.cursor() as cur:
+        sql ="""
+        UPDATE carbon_emission
+        SET coe_source = %s,
+            coe_category = %s,
+            weight_g2g = %s,
+            crawl_time = %s,
+            coe_status = %s
+        WHERE nor_ingredient_name = %s and coe_source='TBA';
         """
         cur.executemany(sql,update_values)
         print(f"total rows to update: {len(update_values)}; affected rows: {cur.rowcount}")
