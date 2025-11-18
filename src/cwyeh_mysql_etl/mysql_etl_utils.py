@@ -785,3 +785,95 @@ def register_coemission(conn, coe_json: list[dict]):
     with conn.cursor() as cur:
         cur.executemany(sql, ins_values)
         conn.commit()
+
+
+### Update Data ------------------------------------------------------------
+def update_ingredient_w_normalize(conn):
+    """
+    Update ingredient's normalized name
+
+    Backlog
+    - make it batch update
+    """
+
+    ### 1. get records to be updated (status = 'pending')
+    with conn.cursor() as cur:
+        sql ="""
+        select ori_ingredient_id, ori_ingredient_name
+        from ingredient_normalize
+        where normalize_status='pending'
+        """
+        cur.execute(sql)
+        rows = cur.fetchall()
+        if not rows:
+            print("No pending ingredient to normalize.")
+            return
+        print(f"Found {len(rows)} pending rows")
+
+    ### 2. normalize
+    update_values = []
+    for row in rows:
+        normalized = get_normalize(row["ori_ingredient_name"])
+        if normalized is None:
+            new_status = "error"
+        else:
+            new_status = "done"
+        update_values.append(
+            (normalized, new_status, row["ori_ingredient_id"])
+        )
+
+    ### 3. update
+    with conn.cursor() as cur:
+        sql ="""
+        UPDATE ingredient_normalize
+        SET nor_ingredient_name = %s,
+            normalize_status = %s
+        WHERE ori_ingredient_id = %s;
+        """
+        cur.executemany(sql,update_values)
+        print(f"total rows to update: {len(update_values)}; affected rows: {cur.rowcount}")
+        conn.commit()
+
+
+def update_unit_w_u2g(conn):
+    """
+    Update unit_normalize's corresponding grams
+    """   
+
+    ### 1. get records to be updated (status = 'pending')
+    with conn.cursor() as cur:
+        sql ="""
+        select ori_ingredient_id, ori_ingredient_name, unit_name
+        from unit_normalize
+        where u2g_status='pending'
+        """
+        cur.execute(sql)
+        rows = cur.fetchall()
+        if not rows:
+            print("[Task4] No pending ingr-unit pair to normalize.")
+            return
+        print(f"Found {len(rows)} pending rows")
+    
+    ### 2. ingredient_name-unit pair to gram (u2g)
+    update_values = []
+    for row in rows:
+        u2g_values = query_unit2gram(row["ori_ingredient_name"],row["unit_name"])
+        if u2g_values is None:
+            new_status = "error"
+        else:
+            new_status = "done"
+        update_values.append(
+            (u2g_values, new_status, row["ori_ingredient_id"],row["unit_name"])
+        )
+    
+    ### 3. update
+    with conn.cursor() as cur:
+        sql ="""
+        UPDATE unit_normalize
+        SET weight_grams = %s,
+            u2g_status = %s
+        WHERE ori_ingredient_id = %s and unit_name = %s;
+        """
+        cur.executemany(sql,update_values)
+        print(f"total rows to update: {len(update_values)}; affected rows: {cur.rowcount}")
+        conn.commit()
