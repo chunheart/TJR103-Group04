@@ -48,6 +48,7 @@ services:
       - $PWD/airflow/logs:/opt/airflow/logs
       - $PWD/airflow/utils:/opt/airflow/utils
       - $PWD/airflow/tasks:/opt/airflow/tasks
+      - $PWD/airflow/data:/opt/airflow/data
       - $PWD/src:/opt/airflow/src
     environment:
       PYTHONPATH: "/opt/airflow/src"

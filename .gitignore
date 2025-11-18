@@ -1,4 +1,5 @@
 # airflow (DO NOT track logs)
+airflow/data/
 airflow/logs/
 airflow/logs/scheduler/
 
