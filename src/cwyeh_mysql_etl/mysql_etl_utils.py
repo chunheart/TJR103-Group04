@@ -3,6 +3,8 @@ import json
 import math
 import time
 import os
+import shutil
+import glob
 
 import numpy as np
 import pandas as pd
@@ -260,13 +262,55 @@ def init_tables(
         cursor.close()
 
 
+### Ingest Data from sources
+def clean_local_storage(
+    base_dir:str='/opt/airflow/data/stage/icook_recipe',
+    tar_date=None,
+    retention_days:int=14,
+):
+    """
+    清理本地端暫存的原始資料
+    """
+    if not tar_date:
+        tar_date = dt.datetime.today()
+    cutoff_date = (tar_date - dt.timedelta(days=retention_days)).date()
+    print(f'Clean staged data before {cutoff_date}')
+
+    if not os.path.exists(base_dir):
+        print(f"[cleanup] base_dir not exists: {base_dir}")
+        return
+
+    for entry in os.scandir(base_dir):
+        print(entry)
+        if not entry.is_dir():
+            continue
+    
+        date_str = entry.name  # 預期是 yyyymmdd
+        dir_path = entry.path
+
+        # 解析資料夾名稱是不是合法日期
+        try:
+            date_obj = dt.datetime.strptime(date_str, "%Y%m%d").date()
+        except ValueError:
+            print(f"[cleanup] skip non-date dir: {dir_path}")
+            continue
+
+        # (1) Clean outdated data
+        if date_obj < cutoff_date:
+            print(f"[cleanup] remove old dir: {dir_path}")
+            shutil.rmtree(dir_path, ignore_errors=True)
+            continue
+        
+        # (2) Combine data
+        # pending
+
+
 ### Get Data ------------------------------------------------------------
 def get_recipe_data(
-    tar_date,
-    back_days,
-    source='demo',
-    if_insert=False,
-    kafka_consumer=False
+    tar_date:str,
+    back_days:int,
+    source:str='demo',
+    path:str=None,
 ) -> list:
     """
     get recipe data from several available source
@@ -274,12 +318,20 @@ def get_recipe_data(
 
     INPUTs
     -----------
-    tar_date
-    back_days
+    tar_date (yyyymmdd)
+    back_days (backfill days since tar_date (including))
     source
-      demo: return demo records
-      kafka: get data from a kafka consumer-client [require a kafka producer]
+      demo: return demo records of recipe
+      local: return staged records of recipe
+      kafka: (not support, use ingest_data_from_kafka() instead)
     """
+    ### setting
+    tar_date_dt = dt.datetime.strptime(tar_date, "%Y%m%d").date()
+    dates_to_read = [(tar_date_dt - dt.timedelta(days=i)).strftime("%Y%m%d")
+                     for i in range(back_days)]
+    print(f"[Task1] target_date={tar_date_dt}, back_days={back_days}")
+    print(f"[Task1] dates_to_read={dates_to_read}")
+    
     if source=='demo':
         demo_recipe = [
           {
@@ -294,8 +346,8 @@ def get_recipe_data(
             "ingredient_name": "小番茄",
             "weight_value": 50,
             "weight_unit": "公克",
-            "publish_date": "2007-12-13",
-            "crawl_time": "2025-10-19 10:11:21",
+            "publish_date": tar_date_dt.strftime('%Y-%m-%d'),
+            "crawl_time": dt.datetime.now(),
           },
           {
             "recipe_id": "F05-7777",
@@ -309,8 +361,8 @@ def get_recipe_data(
             "ingredient_name": "雞蛋",
             "weight_value": 15,
             "weight_unit": "公克",
-            "publish_date": "2007-12-13",
-            "crawl_time": "2025-10-19 10:11:21",
+            "publish_date": tar_date_dt.strftime('%Y-%m-%d'),
+            "crawl_time": dt.datetime.now(),
           },
           {
             "recipe_id": "F05-8888",
@@ -324,14 +376,50 @@ def get_recipe_data(
             "ingredient_name": "茶包",
             "weight_value": 6,
             "weight_unit": "公克",
-            "publish_date": "2007-12-13",
-            "crawl_time": "2025-10-19 10:11:21",
+            "publish_date": tar_date_dt.strftime('%Y-%m-%d'),
+            "crawl_time": dt.datetime.now(),
           },
         ]
         return demo_recipe
         
-    if source=='kafka':
-        pass
+    if source=='local':
+
+        ### read files from a local path
+        results = []
+        for date_str in dates_to_read:
+            date_dir = os.path.join(path, date_str)
+            if not os.path.exists(date_dir):
+                print(f"[Task1] skip missing dir: {date_dir}")
+                continue
+        
+            pattern = os.path.join(date_dir, "*.json")
+            files = sorted(glob.glob(pattern))
+            if not files:
+                print(f"[Task1] no files in {date_dir}")
+                continue
+            
+            ### read valid files <valid date>.<...>.json
+            print(f"[Task1] reading {len(files)} files from {date_dir}")
+            for fp in files:
+              print(fp)
+              for fp in files:
+                try:
+                    with open(fp, "r", encoding="utf-8") as f:
+                        content = f.read().strip()
+                        if not content:
+                            continue
+
+                        # assume it's json, not jsonl or else
+                        if content.startswith("["):
+                          arr = json.loads(content)
+                          if isinstance(arr, list):
+                              results.extend(arr)
+                          else:
+                              print(f"[Task1] WARN: {fp} is not JSON array.")
+
+                except Exception as e:
+                    print(f"[Task1] failed to read {fp}: {e}")
+        return results
 
 
 def get_coemission_data(source='myemission'):

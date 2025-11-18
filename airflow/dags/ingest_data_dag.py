@@ -27,16 +27,25 @@ default_args = {
 def ingest_data_dag():
 
     @task
-    def task1():
-        return myetl.get_recipe_data(tar_date=1,back_days=1,source='demo')
-
-    @task
-    def task2(t1_res):
-        print("Running Task 2 (Saving data as json, locally)")
-        for row in t1_res[:3]:
+    def ingest_recipe_data():
+        """
+        ingest recipe data from assigned source
+        - batch write to local
+        """
+        res = myetl.get_recipe_data(tar_date=1,back_days=1,source='demo')
+        for row in res[:3]:
             print(row)
 
-    t1_res = task1()
-    task2(t1_res)
+    @task
+    def clean_local_storage():
+        """
+        clean local storage (/opt/airflow/data/stage)
+        (1) combine several file under a day
+        (2) remove old data
+        """
+        print("Running Task 2 (Saving data as json, locally)")
+
+    res1 = ingest_recipe_data()
+    clean_local_storage().set_upstream(res1)
 
 ingest_data_dag()

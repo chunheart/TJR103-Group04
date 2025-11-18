@@ -1,5 +1,6 @@
 # airflow (DO NOT track logs)
 airflow/logs/
+airflow/logs/scheduler/
 
 # locally devlop
 local/
