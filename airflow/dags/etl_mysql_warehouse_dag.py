@@ -7,6 +7,15 @@ from airflow.models.param import Param
 import cwyeh_mysql_etl.mysql_etl_utils as myetl
 
 
+# Helpers
+def print_sth_or_not(res):
+    if res:
+        for row in res[:3]:
+            print(row)
+    else:
+        print('Nothing')
+
+
 # Setting
 default_args = {
     "owner": "airflow",
@@ -17,6 +26,7 @@ default_args = {
     "retries": 0,
     "retry_delay": dt.timedelta(minutes=1),
 }
+
 
 # Define the DAG
 @dag(
@@ -49,20 +59,32 @@ def etl_mysql_warehouse():
             source='local',
             path='/opt/airflow/data/stage/icook_recipe'
         )
-        for row in res[:3]:
-            print(row)
+        print_sth_or_not(res)
         return res
 
     @task
-    def insert_mysql(res):
+    def clean_recipe_data(res):
         """
         TBA
         """
         print("Running Task 2")
-        for row in res[:3]:
-            print(row)
+        res = myetl.clean_recipe_data(res)
+        print_sth_or_not(res)
+        return res
+
+    @task
+    def insert_recipe_into_mysql(res):
+        """
+        TBA
+        """
+        print("Running Task 3")
+        print_sth_or_not(res)
+
 
     res1 = get_recipe_data()
-    insert_mysql(res1)
+    res2 = clean_recipe_data(res1)
+    insert_recipe_into_mysql(res2)
+
+
 
 etl_mysql_warehouse()

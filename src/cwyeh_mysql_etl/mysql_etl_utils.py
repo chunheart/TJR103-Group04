@@ -340,7 +340,7 @@ def get_recipe_data(
             "recipe_name": "番茄炒蛋C",
             "recipe_url": "https://www.ytower.com.tw/recipe/iframe-recipe.asp?seq=F05-0228",
             "author": "Cathy",
-            "servings": 2,
+            "servings": None,
             "cook_time": None,
             "ingredient_type": "食材",
             "ingredient_name": "小番茄",
@@ -374,8 +374,8 @@ def get_recipe_data(
             "cook_time": None,
             "ingredient_type": "食材",
             "ingredient_name": "茶包",
-            "weight_value": 6,
-            "weight_unit": "公克",
+            "weight_value": None,
+            "weight_unit": "適量",
             "publish_date": tar_date_dt.strftime('%Y-%m-%d'),
             "crawl_time": dt.datetime.now(),
           },
@@ -462,6 +462,55 @@ def get_coemission_data(source='myemission'):
         return json.loads(myemission_df.to_json(orient='records'))
 
 
+### Clean Data ------------------------------------------------------------
+def clean_recipe_data(recipe_json:list[dict]) -> list[dict]:
+    """
+    clean recipe data, so that it is the correct form for downstream use (mysql)
+    (1) uncapital
+    (2) strip
+    """
+    if not recipe_json:
+        print('No input data')
+        return
+    df = pd.DataFrame(recipe_json)
+    
+    ### unifiy columns
+    need_cols = [
+        "recipe_id", "recipe_site", "recipe_name", "recipe_url","author", "servings",
+        "ingredient_type","ingredient_name","weight_value","weight_unit","publish_date", "crawl_time"
+    ]
+    for c in need_cols:
+        if c not in df.columns:
+            df[c] = None
+    df = df[need_cols]
+
+    ### clean
+    # df.rename(columns={})
+    # str: uncapital, strip, replace None
+    str_clean_cols = [
+        "recipe_id", "recipe_site", "recipe_name", "recipe_url","author","ingredient_type",
+        "ingredient_name","weight_unit"
+    ]
+    for c in str_clean_cols:
+        df[c] = df[c].astype(str).str.lower().str.strip().replace({"": None}) 
+
+    # date: valid date, replace None
+    date_clean_cols = ["publish_date", "crawl_time"]
+    for c in date_clean_cols:
+        df[c] = pd.to_datetime(df[c], errors="coerce")
+        df[c] = df[c].dt.strftime("%Y-%m-%d %H:%M:%S").replace({pd.NaT: None})
+
+    # numbers
+    for c in ["servings", "weight_value"]:
+        df[c] = pd.to_numeric(df[c], errors="coerce")
+        df[c] = df[c].where(df[c] > 0)
+    df['weight_value'] = df['weight_value'].fillna(1)
+
+    ### packing results format
+    return json.loads(df.to_json(orient='records'))
+
+
+### Insert/Register Data ------------------------------------------------------------
 def register_recipe(conn, recipe_json: dict):
     """
     1) 取出 recipe 相關的欄位、去重複

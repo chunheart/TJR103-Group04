@@ -23,7 +23,7 @@ RUN airflow users create \
 
 ### Try to use requirement.txt later [COPY ...]
 RUN pip install --upgrade pip
-RUN pip install --no-cache-dir matplotlib seaborn pymongo \
+RUN pip install --no-cache-dir matplotlib seaborn pymongo ipykernel \
     confluent_kafka kafka-python dotenv scrapy
 
 CMD ["airflow", "standalone"]
