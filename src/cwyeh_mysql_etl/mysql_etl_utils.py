@@ -145,7 +145,7 @@ def init_tables(
                 `recipe_name`    VARCHAR(255),
                 `recipe_url`  VARCHAR(255),
                 `author`         VARCHAR(100),
-                `servings`       INT,
+                `servings`       FLOAT,
                 `publish_time`   DATETIME,
                 `crawl_time`     DATETIME,
                 `ins_time` DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -401,8 +401,7 @@ def get_recipe_data(
             ### read valid files <valid date>.<...>.json
             print(f"[Task1] reading {len(files)} files from {date_dir}")
             for fp in files:
-              print(fp)
-              for fp in files:
+                print(f'Open local file {fp}')
                 try:
                     with open(fp, "r", encoding="utf-8") as f:
                         content = f.read().strip()
@@ -411,11 +410,11 @@ def get_recipe_data(
 
                         # assume it's json, not jsonl or else
                         if content.startswith("["):
-                          arr = json.loads(content)
-                          if isinstance(arr, list):
-                              results.extend(arr)
-                          else:
-                              print(f"[Task1] WARN: {fp} is not JSON array.")
+                            arr = json.loads(content)
+                            if isinstance(arr, list):
+                                results.extend(arr)
+                            else:
+                                print(f"[Task1] WARN: {fp} is not JSON array.")
 
                 except Exception as e:
                     print(f"[Task1] failed to read {fp}: {e}")
@@ -513,9 +512,8 @@ def clean_recipe_data(recipe_json:list[dict]) -> list[dict]:
 ### Insert/Register Data ------------------------------------------------------------
 def register_recipe(conn, recipe_json: dict):
     """
-    1) 取出 recipe 相關的欄位、去重複
-    2) 寫入 recipe
-        使用 upsert：若已有相同 recipe_id x recipe site (PK)，則更新欄位 (ON DUPLICATE clause)
+    1) 取出 recipe 相關的欄位、每個 recipe 僅留一筆
+    2) 寫入 recipe 使用 upsert: 若已有相同 recipe_id x recipe site (PK)，則更新欄位 (ON DUPLICATE clause)
     """
 
     ### Get unique recipe level data and relavant columns
@@ -524,31 +522,24 @@ def register_recipe(conn, recipe_json: dict):
         print('Input data not exist')
         return
 
-    # 確保必要欄位存在
-    need_cols = [
-        "recipe_id", "recipe_site", "recipe_name", "recipe_url",
-        "author", "servings", "publish_date", "crawl_time"
-    ]
-    df = pd.DataFrame(recipe_json)
-    for c in need_cols:
-        if c not in df.columns:
-            df[c] = None
-    df_unique = df.drop_duplicates(subset=["recipe_id", "recipe_site"], keep="first")
-    recipe_values = [
-        (
-            rec["recipe_id"],
-            rec["recipe_site"],
-            rec["recipe_name"],
-            rec["recipe_url"],
-            rec["author"],
-            rec["servings"],
-            rec["publish_date"],
-            rec["crawl_time"],
-        )
-        for _, rec in df_unique.iterrows()
-    ]
-    
-    ### Insert
+    recipe_values = []
+    unique_recipe = set()
+    for row in recipe_json:
+        if (row["recipe_id"],row["recipe_site"]) in unique_recipe:
+            continue
+        else:
+            unique_recipe.add((row["recipe_id"],row["recipe_site"]))
+            recipe_values.append((
+                row["recipe_id"],
+                row["recipe_site"],
+                row["recipe_name"],
+                row["recipe_url"],
+                row["author"],
+                row["servings"],
+                row["publish_date"],
+                row["crawl_time"],
+            ))
+
     sql = """
     INSERT INTO `recipe`
       (`recipe_id`, `recipe_site`, `recipe_name`, `recipe_url`, `author`, `servings`, `publish_time`, `crawl_time`)
@@ -564,82 +555,63 @@ def register_recipe(conn, recipe_json: dict):
     """
     with conn.cursor() as cur:
         cur.executemany(sql, recipe_values)
+        print(f"total rows to insert: {len(recipe_values)}; affected rows: {cur.rowcount}")
         conn.commit()
 
 
 def register_ingredient(conn, recipe_json: list[dict]):
     """
-    1) 針對此次食譜的「所有食材列」：
-       - 找出 ingredient_normalize 還不存在的 ori_ingredient_name
-       - 呼叫 get_normalize() 取得 nor_ingredient_name
-       - insert 進 ingredient_normalize
-
-    Backlog
-    - 也可以用 upsert，但就要做多餘的 get_normalize()
+    1) 針對此次食譜的「所有食材」，寫入 ingredient_normalize
+        - 找出 ingredient_normalize 還不存在的食材 (ori_ingredient_name)
+        - insert(upsert) 進 ingredient_normalize
+    2) 食材的 get_normalize()，延到後面再處理，以 normalize_status 管理 (暫設為 pending)
     """
-    
-    ### 收集此次出現的原始食材名（去重）
-    ori_names = {row["ingredient_name"] for row in recipe_json if row.get("ingredient_name")}
-    if not ori_names:
-        print('No valid ingredients received')
-        return
 
-    ### 找出 input_data 中還未存在於 ingredient_normalize table
-    with conn.cursor() as cur:
-        q = "SELECT ori_ingredient_name FROM ingredient_normalize WHERE ori_ingredient_name IN %s"
-        cur.execute(q, (tuple(ori_names),))
-        exists = {r["ori_ingredient_name"] for r in cur.fetchall()}
-        
-    to_insert = [name for name in ori_names if name not in exists]
-    print(f'{len(to_insert)} (ori) ingredients to be addes')
-    if not to_insert:
-        print('No unexisting ingridient')
-        return
+    ### 準備 insert(upsert) 的資料與模板
+    unique_ingr = set({})
+    to_insert = []
+    for row in recipe_json:
+        if row['ingredient_name'] in unique_ingr:
+            continue
+        else:
+            unique_ingr.add(row['ingredient_name'])
+            to_insert.append((
+                row['ingredient_name'],'pending'
+            ))
 
-    ### 準備 insert 的資料與模板
     sql = """
     INSERT INTO `ingredient_normalize`
-      (`ori_ingredient_name`, `nor_ingredient_name`,`normalize_status`)
-    VALUES (%s, %s, %s);
+        (`ori_ingredient_name`, `normalize_status`)
+    VALUES (%s, %s)
+    ON DUPLICATE KEY UPDATE
+        ori_ingredient_name = ori_ingredient_name;
     """
-    to_insert = [(ori_ingr, get_normalize(ori_ingr),'done') for ori_ingr in to_insert]
-    
-    ### Upsert
+
+    ### insert(upsert) 
     with conn.cursor() as cur:
         cur.executemany(sql, to_insert)
+        print(f"total rows to insert: {len(to_insert)}; affected rows: {cur.rowcount}")
         conn.commit()
 
 
 def register_unit(conn, recipe_json: list[dict]):
     """
-    3) unit_normalize upsert
-       - 查是否已存在 (ori_ingredient_id, unit_name) 或用 ori_ingredient_name + unit_name 推導
-       - 若沒有 weight_grams，呼叫 query_unit2gram()
+    1) unit_normalize upsert
+        - unique (ori_ingredient_name, unit_name) pair
+        - 查 ori_ingredient_name -> ori_ingredient_id
+    2) query_unit2gram() 延後再 update，透過 u2g_status 管理
     """
     
-    ### Find unexistinf unit pairs
+    ### Get unique (ingr_name, id) pair
     ingr_unit_pairs = {(row["ingredient_name"],row['weight_unit']) 
                        for row in recipe_json 
                        if row.get("ingredient_name") and row.get("weight_unit")}
     if not ingr_unit_pairs:
         print('No valid data received')
         return
-            
-    with conn.cursor() as cur:
-        sql = f"""
-            SELECT ori_ingredient_name, unit_name
-            FROM unit_normalize 
-            WHERE (ori_ingredient_name,unit_name) IN ({get_where_in_string(ingr_unit_pairs,warp_with_string=False)})
-            """
-        cur.execute(sql)
-        exists = {(r["ori_ingredient_name"],r['unit_name']) for r in cur.fetchall()}
-    insert_ingr_unit_pairs = [p for p in ingr_unit_pairs if p not in exists]
-    if not insert_ingr_unit_pairs:
-        print('No unexisting ingridient-unit pair')
-        return
     
-    ### Query ingredient id (from ingredient_normalize)
-    names = sorted({name for name, _ in insert_ingr_unit_pairs})
+    ### Query ingr id and get ingr_name -> ingr_id map
+    names = sorted({name for name, _ in ingr_unit_pairs})
     names_to_id = {}
     with conn.cursor() as cur:
         sql = f"""
@@ -654,22 +626,22 @@ def register_unit(conn, recipe_json: list[dict]):
             ori_name = row["ori_ingredient_name"] if isinstance(row, dict) else row[1]
             names_to_id[ori_name] = ori_id
 
-    ### Query unit2gram & Insert values
-    # - query_unit2gram() - may take time, batch query?
-    insert_ingr_unit_pairs = [(names_to_id[p[0]],
-                              p[0],
-                              p[1],
-                              query_unit2gram(p[0],p[1]),
-                              'done') for p in insert_ingr_unit_pairs]
-
     ### Insert to unit_normalize
+    to_insert = [(names_to_id[p[0]],
+                p[0],
+                p[1],
+                None,
+                'pending') for p in ingr_unit_pairs]
     sql_ins = """
     INSERT INTO `unit_normalize`
       (`ori_ingredient_id`, `ori_ingredient_name`, `unit_name`, `weight_grams`,`u2g_status`)
     VALUES (%s, %s, %s, %s, %s)
+    ON DUPLICATE KEY UPDATE
+        ori_ingredient_id = ori_ingredient_id;
     """
     with conn.cursor() as cur:
-        cur.executemany(sql_ins,insert_ingr_unit_pairs)
+        cur.executemany(sql_ins,to_insert)
+        print(f"total rows to insert: {len(to_insert)}; affected rows: {cur.rowcount}")
         conn.commit()
 
 
@@ -728,9 +700,8 @@ def register_coemission_from_recipe(conn, recipe_json: list[dict]):
 
 def register_recipe_ingredient(conn, recipe_json: list[dict]):
     """
-    5) 將此次食譜的食材寫入 recipe_ingredient
-       PK = (recipe_id, ori_ingredient_id)
-       這裡同樣用「名稱 hash → ori_ingredient_id」做暫時 id
+    1) 將此次食譜的食材寫入 recipe_ingredient
+       PK = (recipe_id, recipe_site, ori_ingredient_id)
     """
 
     ### get ingredient_id
@@ -746,15 +717,12 @@ def register_recipe_ingredient(conn, recipe_json: list[dict]):
             FROM ingredient_normalize 
             WHERE ori_ingredient_name IN ({get_where_in_string(ori_names)})
             """
-        print(sql)
         cur.execute(sql)
         for row in cur.fetchall():
             # DictCursor: row["ori_ingredient_id"]；Tuple: row[0]
             ori_id = row["ori_ingredient_id"] if isinstance(row, dict) else row[0]
             ori_name = row["ori_ingredient_name"] if isinstance(row, dict) else row[1]
-            names_to_id[ori_name] = ori_id
-    print(names_to_id)
-    
+            names_to_id[ori_name] = ori_id    
     
     ### Insert (Upsert)
     sql = """
@@ -775,9 +743,9 @@ def register_recipe_ingredient(conn, recipe_json: list[dict]):
         row['weight_unit'],
         row['weight_value'],
     ) for row in recipe_json if row.get("ingredient_name")]
-
     with conn.cursor() as cur:
         cur.executemany(sql, ins_values)
+        print(f"total rows to insert: {len(ins_values)}; affected rows: {cur.rowcount}")
         conn.commit()
 
 

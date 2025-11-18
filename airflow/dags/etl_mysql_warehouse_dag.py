@@ -9,6 +9,7 @@ import cwyeh_mysql_etl.mysql_etl_utils as myetl
 
 # Helpers
 def print_sth_or_not(res):
+    print(f'size: {len(res)}')
     if res:
         for row in res[:3]:
             print(row)
@@ -78,7 +79,17 @@ def etl_mysql_warehouse():
         TBA
         """
         print("Running Task 3")
-        print_sth_or_not(res)
+        with myetl.get_mysql_connection(
+            host='mysql',port=3306,user='root',password='pas4word',db='EXAMPLE',
+        ) as my_conn:
+            myetl.register_recipe(my_conn, res)
+            print('[DONE] insert into recipe')
+            myetl.register_ingredient(my_conn, res)
+            print('[DONE] insert into ingredient_normalize')
+            myetl.register_unit(my_conn, res)
+            print('[DONE] insert into unit_normalize')
+            myetl.register_recipe_ingredient(my_conn, res)
+            print('[DONE] insert into recipe_ingredient')
 
 
     res1 = get_recipe_data()
