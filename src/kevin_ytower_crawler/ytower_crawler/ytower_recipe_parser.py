@@ -72,13 +72,14 @@ def parse_ytower_recipe(response):
                 yield {
                     'ID': recipe_id,
                     'Recipe_Title': recipe_title,
-                    'Author': 'N/A',       # Field exists in schema, but not on this site
-                    'Likes': 'N/A',        # Field exists in schema, but not on this site
+                    'Author': 'null',       # Field exists in schema, but not on this site
                     'Recipe_URL': response.url,
+                    'Servings': 'null',
                     'Type': list_type,
                     'Ingredient_Name': ingredient_name,
                     'Weight': weight,
                     'Unit': unit,
                     'Publish_Date': display_date,
-                    'Crawl_Time': current_crawl_time
+                    'Crawl_Time': current_crawl_time,
+                    'site': 'ytower'
                 }

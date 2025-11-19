@@ -32,6 +32,21 @@ AUTOTHROTTLE_TARGET_CONCURRENCY = 1.0
 # Set CSV export encoding to 'utf-8-sig' for Excel compatibility
 FEED_EXPORT_ENCODING = "utf-8-sig"
 
+# Force the specified order of output fields
+FEED_EXPORT_FIELDS = [
+    'ID',
+    'Recipe_Title',
+    'Author',
+    'Recipe_URL',
+    'Servings',        
+    'Type',
+    'Ingredient_Name',
+    'Weight',
+    'Unit',
+    'Publish_Date',
+    'Crawl_Time',
+    'site'             
+]
 # ==========================================================
 # --- Scrapy Default Templates (Can be ignored) ---
 # ==========================================================
