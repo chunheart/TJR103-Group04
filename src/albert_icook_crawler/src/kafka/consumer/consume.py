@@ -4,10 +4,10 @@ from datetime import datetime
 from pathlib import Path
 from dotenv import load_dotenv
 from confluent_kafka import Consumer, KafkaException, KafkaError
-from src.kafka.utils.mongodb_connection import connect_to_local_mongodb
+from src.utils.mongodb_connection import connect_to_local_mongodb
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3] # root directory
-ENV_FILE_PATH = PROJECT_ROOT / "kafka" /".env"
+ENV_FILE_PATH = PROJECT_ROOT / "src" / "kafka" /".env"
 load_dotenv(ENV_FILE_PATH)
 
 LOG_DIR_CONSUME = PROJECT_ROOT / "logs" / "kafka" / "consume"

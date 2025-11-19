@@ -201,10 +201,10 @@ def main():
     """
 
     df = pd.read_csv(PROJECT_ROOT / "data" / "mongodb" / "Albert" / "ingredient_data_2025-11-12.csv")
-    ingredient_counts = df.count()
+    # ingredient_counts = df.count()
     # print(ingredient_counts)
-    ingredient_dif_counts = df["ingredients"].nunique()
-    print(ingredient_dif_counts)
+    # ingredient_dif_counts = df["ingredients"].nunique()
+    # print(ingredient_dif_counts)
     df.dropna(inplace=True)
     df["t_ingredients"] = df["ingredients"].astype(str).apply(v1_convert)
     # print(df[df["t_ingredients"] == True].count())

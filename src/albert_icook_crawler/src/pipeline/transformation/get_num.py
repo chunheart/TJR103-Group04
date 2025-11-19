@@ -1,4 +1,4 @@
-import utils_regex_pattern as rep
+from src.pipeline.utils import num_regex_pattern as rep
 
 from decimal import Decimal, ROUND_HALF_UP
 

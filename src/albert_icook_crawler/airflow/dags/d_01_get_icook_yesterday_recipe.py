@@ -32,8 +32,8 @@ dag = DAG(
     'd_01_get_icook_yesterday_recipe',  #
     default_args=default_args,
     description='Python operators',  #
-    schedule_interval="0 5 * * *",  #
-    start_date=datetime(2025, 11, 17, tzinfo=LOCAL_TZ),
+    schedule="* 21 * * *",  #
+    start_date=pendulum.datetime(2025, 11, 18, tz="UTC"),
     catchup=False,
     tags=["scrapy", "icook"]
 )

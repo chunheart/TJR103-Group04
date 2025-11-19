@@ -3,7 +3,7 @@ from confluent_kafka import KafkaError
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3] # root directory
-ENV_FILE_PATH = PROJECT_ROOT / "kafka" / ".env"
+ENV_FILE_PATH = PROJECT_ROOT / "src" /"kafka" / ".env"
 
 
 def setup_kafka_topics(admin, desired_topics_config, replication=1):
@@ -84,7 +84,7 @@ def setup_kafka_topics(admin, desired_topics_config, replication=1):
                 result = []
                 with open(file=ENV_FILE_PATH, mode="a", encoding="utf-8") as file:
                     for i, value in enumerate(value_to_env, start=start_index):
-                        result.append(f"TOPIC_{i}={value}")
+                        result.append(f"KAFKA_TOPIC_{i}={value}")
 
                     result = "\n".join(result)
 
@@ -127,9 +127,11 @@ def main():
         if topic == "":
             print("Topic cannot be empty!")
             print("=" * 40)
+            continue
         elif topic in desired_config:
             print("Topic already exists!")
             print("=" * 40)
+            continue
         elif topic == "exit":
             break
         partitions = int(input("Partitions(default=1): "))
@@ -152,5 +154,4 @@ def main():
 
 
 if __name__ == "__main__":
-    # main()
-    print(PROJECT_ROOT)
+    main()

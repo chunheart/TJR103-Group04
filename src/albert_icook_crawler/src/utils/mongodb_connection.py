@@ -7,7 +7,7 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3] # root directory
 ENV_FILE_PATH = PROJECT_ROOT / "kafka" / ".env"
-load_dotenv(ENV_FILE_PATH)
+load_dotenv()
 
 
 """connect to local MongoDB Server"""

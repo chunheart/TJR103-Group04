@@ -4,10 +4,10 @@ from datetime import datetime
 from pathlib import Path
 from dotenv import load_dotenv
 from confluent_kafka import Consumer, KafkaException, KafkaError
-from src.kafka.utils.mongodb_connection import connect_to_local_mongodb
+from src.utils.mongodb_connection import connect_to_local_mongodb
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3] # root directory
-ENV_FILE_PATH = PROJECT_ROOT / "kafka" /".env"
+ENV_FILE_PATH = PROJECT_ROOT / "src" / "kafka" /".env"
 load_dotenv(ENV_FILE_PATH)
 
 LOG_DIR_CONSUME = PROJECT_ROOT / "logs" / "kafka" / "consume"
@@ -36,7 +36,7 @@ def create_consumer(group_id, topic_name, logger):
     # Consumer configuration
     # See https://github.com/edenhill/librdkafka/blob/master/CONFIGURATION.md
     props = {
-        'bootstrap.servers': 'localhost:9092',  # Kafka集群在那裡?
+        'bootstrap.servers': 'kafka:29092',  # Kafka集群在那裡?
         'group.id': group_id,  # ConsumerGroup的名稱
         'auto.offset.reset': 'earliest',  # 是否從這個ConsumerGroup尚未讀取的partition/offset開始讀
         'enable.auto.commit': False,  # 是否啟動自動commit

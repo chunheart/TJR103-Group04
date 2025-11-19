@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3] # root directory
-ENV_FILE_PATH = PROJECT_ROOT / "kafka" /".env"
+ENV_FILE_PATH = PROJECT_ROOT / "src" / "kafka" /".env"
 load_dotenv(ENV_FILE_PATH)
 
 LOG_DIR_PRODUCE = PROJECT_ROOT / "logs" / "kafka" / "produce"
@@ -43,7 +43,7 @@ def move_to_processed_dir(file,logger):
         processed_file_path = processed_dir / file_name
         Path(file).rename(processed_file_path)
 
-        logger.info(f"[Generator] Archived finished file: {file_name}")
+        logger.info(f"[Generator] Archived finished file: {processed_file_path}")
 
 
 def convert_csv_to_dict(c, logger):
@@ -79,7 +79,7 @@ def set_log_config(log_file):
 
 def activate_producer(logger):
     props = {
-        'bootstrap.servers': 'localhost:9092',  # <-- 置換成要連接的Kafka集群
+        'bootstrap.servers': 'kafka:29092',  # <-- for airflow usage
         # 'acks': 'all',
         # 'linger.ms': 5,
         # 'batch.size': 32768,
@@ -173,5 +173,5 @@ def produce():
 
 
 if __name__ == "__main__":
-    # produce()
-    print(PROJECT_ROOT)
+    produce()
+    # print(PROJECT_ROOT)

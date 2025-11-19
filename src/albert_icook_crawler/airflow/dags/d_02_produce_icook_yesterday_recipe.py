@@ -8,7 +8,6 @@ from datetime import datetime, timedelta
 
 os.makedirs(f"/opt/airflow/logs/kafka/produce", exist_ok=True)
 
-LOCAL_TZ = pendulum.timezone("Asia/Taipei")
 
 def produce_messages():
     produce()
@@ -30,8 +29,8 @@ dag = DAG(
     'd_02_produce_icook_yesterday_recipe',  #
     default_args=default_args,
     description='Python operators',  #
-    schedule_interval="0 10 * * *",  #
-    start_date=datetime(2025, 11, 17, tzinfo=LOCAL_TZ),
+    schedule="* 23 * * *",  #
+    start_date=pendulum.datetime(2025, 11, 18, tz="UTC"),
     catchup=False,
     tags=["produce", "icook"]
 )
