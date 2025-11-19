@@ -22,7 +22,7 @@ Utils for mysql ETL, CRUD.
 """
 
 # GLOBALs ------------------------------------------------------------
-TRANS_API_KEY = os.getenv("MY_VAR")
+TRANS_API_KEY = os.getenv("MY_GOOGLE_TRANS_API_KEY")
 
 
 ### Helpers
@@ -87,7 +87,7 @@ def get_mysql_connection(
         HOST = "mysql"
         PORT = 3306
         USER = "root"
-        PASSWORD = "pas4word"
+        PASSWORD = "<your password>"
     """
     # === 嘗試連線 ===
     conn = pymysql.connect(
@@ -95,9 +95,9 @@ def get_mysql_connection(
             port=port,
             user=user,
             password=password,
-            charset="utf8mb4",
-            connect_timeout=5,
-            cursorclass=pymysql.cursors.DictCursor,
+            charset=charset,
+            connect_timeout=connect_timeout,
+            cursorclass=cursorclass,
         )
     if db:
         try:
@@ -419,7 +419,7 @@ def get_recipe_data(
         return results
 
 
-def get_coemission_data(source='myemission'):
+def get_coemission_data(source='myemission',translate_api_key=TRANS_API_KEY):
     """
     get and clean data from several carbon emission site
     - this is likely to be an one-time task
@@ -440,7 +440,7 @@ def get_coemission_data(source='myemission'):
             qlist = list(myemission_df['name'].iloc[b*batch_size:(b+1)*batch_size])
             res_list = translate(
                 qlist=qlist,
-                key=TRANS_API_KEY,
+                key=translate_api_key,
                 target_lang='zh-TW',
             )
             trans_name += res_list

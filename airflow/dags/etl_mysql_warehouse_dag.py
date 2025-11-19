@@ -9,8 +9,8 @@ import cwyeh_mysql_etl.mysql_etl_utils as myetl
 
 # Helpers
 def print_sth_or_not(res):
-    print(f'size: {len(res)}')
     if res:
+        print(f'size: {len(res)}')
         for row in res[:3]:
             print(row)
     else:
@@ -69,8 +69,9 @@ def etl_mysql_warehouse():
         TBA
         """
         print("Running Task 2")
-        res = myetl.clean_recipe_data(res)
-        print_sth_or_not(res)
+        if res:
+            res = myetl.clean_recipe_data(res)
+            print_sth_or_not(res)
         return res
 
     @task
@@ -79,17 +80,18 @@ def etl_mysql_warehouse():
         TBA
         """
         print("Running Task 3")
-        with myetl.get_mysql_connection(
-            host='mysql',port=3306,user='root',password='pas4word',db='EXAMPLE',
-        ) as my_conn:
-            myetl.register_recipe(my_conn, res)
-            print('[DONE] insert into recipe')
-            myetl.register_ingredient(my_conn, res)
-            print('[DONE] insert into ingredient_normalize')
-            myetl.register_unit(my_conn, res)
-            print('[DONE] insert into unit_normalize')
-            myetl.register_recipe_ingredient(my_conn, res)
-            print('[DONE] insert into recipe_ingredient')
+        if res:
+            with myetl.get_mysql_connection(
+                host='mysql',port=3306,user='root',password='pas4word',db='EXAMPLE',
+            ) as my_conn:
+                myetl.register_recipe(my_conn, res)
+                print('[DONE] insert into recipe')
+                myetl.register_ingredient(my_conn, res)
+                print('[DONE] insert into ingredient_normalize')
+                myetl.register_unit(my_conn, res)
+                print('[DONE] insert into unit_normalize')
+                myetl.register_recipe_ingredient(my_conn, res)
+                print('[DONE] insert into recipe_ingredient')
         return res
 
     @task
@@ -97,13 +99,14 @@ def etl_mysql_warehouse():
         """
         TBA
         """
-        with myetl.get_mysql_connection(
-            host='mysql',port=3306,user='root',password='pas4word',db='EXAMPLE',
-        ) as my_conn:
-            myetl.update_unit_w_u2g(my_conn)
-            myetl.update_ingredient_w_normalize(my_conn)
-            myetl.register_coemission_from_recipe(my_conn,res)
-            myetl.update_coemission_w_query(my_conn)
+        if res:
+            with myetl.get_mysql_connection(
+                host='mysql',port=3306,user='root',password='pas4word',db='EXAMPLE',
+            ) as my_conn:
+                myetl.update_unit_w_u2g(my_conn)
+                myetl.update_ingredient_w_normalize(my_conn)
+                myetl.register_coemission_from_recipe(my_conn,res)
+                myetl.update_coemission_w_query(my_conn)
             
 
     res1 = get_recipe_data()
