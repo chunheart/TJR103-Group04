@@ -9,7 +9,7 @@ from google import genai
 from google.genai import types
 
 # ================= CONFIGURATION =================
-API_KEY = os.getenv("GEMINI_API_KEY", "AIzaSyDUYuNsqyiuXN3PRycIDz0Y8rV1sCx0eIw") 
+API_KEY = os.getenv("GEMINI_API_KEY", "請填入API KEY") 
 MODEL_NAME = "gemini-2.5-flash"
 
 # 檔案路徑
