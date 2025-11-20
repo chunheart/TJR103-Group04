@@ -37,6 +37,9 @@ git
 # Build airflow-python container
 # docker build -f service/mysql_etl/airflow.Dockerfile -t py_airflow:latest .
 
+# set KEYs (for testing purpose)
+export MY_GOOGLE_TRANS_API_KEY = {your key}
+
 # start containers: mysql, airflow-python
 # build image (py_airflow) if not existing
 docker-compose -f service/mysql_etl/docker-compose.yaml up -d
