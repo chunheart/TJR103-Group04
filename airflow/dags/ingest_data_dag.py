@@ -6,7 +6,7 @@ import cwyeh_mysql_etl.mysql_etl_utils as myetl
 
 # Setting
 default_args = {
-    "owner": "airflow",
+    "owner": "cwyeh",
     "depends_on_past": False,
     "email": ["your_email@example.com"],
     "email_on_failure": False,

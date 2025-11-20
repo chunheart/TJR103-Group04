@@ -57,11 +57,10 @@ def translate(qlist: list[str], key, target_lang: str = "zh-TW") -> list[str]:
 
 def query_coemission(nor_ingredient_name: list[str]) -> dict:
     """
-    查詢碳排係數，回 dict 或 None。
-    範例回傳結構：{'beef': {'coe_values':100,'coe_status':'done'}, 'poork':{'coe_values':None,'coe_status':'error'}}
-    
-    Backlog
-    - modify error control
+    查詢食材名稱的碳排係數，回 dict
+    - take zh-TW, translate to EN and query
+    - return example
+        {'牛肉': {'eng_query':'beef','coe_values':100,'coe_status':'done'}}
     """
         
     ### translate - mapping
@@ -84,8 +83,9 @@ def query_coemission(nor_ingredient_name: list[str]) -> dict:
         pass
 
     ### clean response carbon data [keep 1 for each query]
+    # (1) prod_name contain in query (2) keep top 3 similar name and avg
     filter_if_contain = res.apply(lambda r: r["query"] in r["prod_name"],axis=1)
-    cleaned_res = res[filter_if_contain]
+    cleaned_res = res[filter_if_contain].copy()  # To avoid [SettingWithCopyWarning]
     cleaned_res['score'] = cleaned_res.apply(lambda r: SequenceMatcher(None, r['query'], r['prod_name']).ratio(),axis=1)
     cleaned_res = cleaned_res.sort_values(["query", "score"], ascending=[True, False]).groupby("query").head(3)
     cleaned_res = cleaned_res.groupby("query", as_index=False)["total_coe"].mean()\
@@ -946,14 +946,17 @@ def update_coemission_w_query(conn):
     ### 2. query coemission
     update_values = []
     for row in rows:
-        coe_values = query_coemission([row["nor_ingredient_name"]])
+        query_ingr_name = row["nor_ingredient_name"]
+        coe_values = query_coemission([query_ingr_name])
+        print(coe_values)
         update_values.append((
             'carboncloud',
+            coe_values.get(query_ingr_name,{}).get('eng_query'),
             None,
-            coe_values[row["nor_ingredient_name"]]['coe_values'],
+            coe_values.get(query_ingr_name,{}).get('coe_values'),
             dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            coe_values[row["nor_ingredient_name"]]['coe_status'], 
-            row["nor_ingredient_name"]
+            coe_values.get(query_ingr_name,{}).get('coe_status','error'),
+            query_ingr_name,
         ))
 
     ### 3. update
@@ -961,6 +964,7 @@ def update_coemission_w_query(conn):
         sql ="""
         UPDATE carbon_emission
         SET coe_source = %s,
+            ref_ingredient_name = %s,
             coe_category = %s,
             weight_g2g = %s,
             crawl_time = %s,
