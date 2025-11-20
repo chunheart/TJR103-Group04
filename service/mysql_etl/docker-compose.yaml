@@ -1,0 +1,64 @@
+services:
+  mysql:
+    container_name: mysql_container1
+    image: mysql:8.4.7
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: pas4word
+    ports:
+      - "3307:3306"
+    networks:
+      - mysql-etl-network
+    volumes:
+      # 將資料持久化
+      - mysql_data:/var/lib/mysql
+      # 可選：自訂設定檔（如有 my.cnf 可掛載）
+      # - ./my.cnf:/etc/mysql/conf.d/my.cnf:ro
+
+  # python-jupyter:
+  #   container_name: py-analysis
+  #   image: py_analysis:latest
+  #   restart: unless-stopped
+  #   ports:
+  #     - "8888:8888"
+  #   networks:
+  #     - mysql-etl-network
+  #   volumes:
+  #     - $PWD:/work
+  #   depends_on:
+  #     - mysql
+  #   environment:
+  #     - PYTHONPATH=/work/src
+
+  airflow:
+    image: py_airflow:latest
+    build: 
+      context: .
+      dockerfile: airflow.Dockerfile
+    container_name: py_airflow
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    networks:
+      - mysql-etl-network
+    depends_on:
+      - mysql
+    volumes:
+      - $PWD/airflow/dags:/opt/airflow/dags
+      - $PWD/airflow/logs:/opt/airflow/logs
+      - $PWD/airflow/utils:/opt/airflow/utils
+      - $PWD/airflow/tasks:/opt/airflow/tasks
+      - $PWD/airflow/data:/opt/airflow/data
+      - $PWD/src:/opt/airflow/src
+    environment:
+      PYTHONPATH: "/opt/airflow/src"
+      AIRFLOW__WEBSERVER__SHOW_TRIGGER_FORM_IF_NO_PARAMS: "true"
+
+volumes:
+  mysql_data:
+    name: mysql_data
+    driver: local
+
+networks:
+  mysql-etl-network:
+    driver: bridge
