@@ -36,7 +36,7 @@ git
 docker build -f service/mysql_etl/airflow.Dockerfile -t py_airflow:latest .
 
 # set KEYs (for testing purpose)
-export MY_GOOGLE_TRANS_API_KEY = {your key}
+export MY_GOOGLE_TRANS_API_KEY={your key}
 
 # start kafka
 docker-compose -f src/gina_icook_crawler/kafka/docker-compose.yml up -d

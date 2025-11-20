@@ -52,11 +52,11 @@ with DAG(
     )
 
     # Step 2：執行爬蟲（只有檔案不存在時）
+    # adjust daily.py path
     run_crawler = BashOperator(
         task_id="run_icook_daily",
         bash_command="""
-        cd /opt/airflow/plugins/icook &&
-        python daily.py \
+        python /opt/airflow/src/gina_icook_crawler/daily.py \
             --since "{{ (data_interval_start - macros.timedelta(days=1)).in_timezone('Asia/Taipei').strftime('%Y-%m-%d') }}" \
             --before "{{ (data_interval_start - macros.timedelta(days=1)).in_timezone('Asia/Taipei').strftime('%Y-%m-%d') }}" \
             --debug
