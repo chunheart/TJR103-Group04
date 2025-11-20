@@ -27,6 +27,16 @@ CMP_PATTERN_WITH_DIGITAL_FRACTION_WITHOUT_RANGE = re.compile(
 #### 1/3g
 
 
+PATTERN_WITH_FRACTION_SYMBOL_WITHOUT_RANGE = r"""
+    ((?:\d?[½⅓⅔¼¾⅕]))
+    (?:\s?([a-zA-Z%°\.一-龥]+))?
+"""
+
+CMP_PATTERN_WITH_FRACTION_SYMBOL_WITHOUT_RANGE = re.compile(
+    PATTERN_WITH_FRACTION_SYMBOL_WITHOUT_RANGE,
+    re.VERBOSE
+)
+
 #### 三公斤 or 三 公斤, it works
 PATTERN_WITH_CHINESE_NUM_WITHOUT_RANGE = r"""
     ((?:[半一二三四五六七八九十百千萬]+))
@@ -113,8 +123,23 @@ CHAR_NUM_MAPS = {
 }
 
 
+
+FRACTION_SYMBOL_NUM_MAPS = {
+    "½": "0.5",
+    "⅓": "0.33",
+    "⅔": "0.67",
+    "¼": "0.25",
+    "¾": "0.75",
+    "⅕": "0.2",
+}
+
+
+
+
 if __name__ == "__main__":
-    pass
+    txt = "1½ kg"
+    extracted = extract_and_convert(txt)
+    print(extracted)
     # text = "雞肉"
     # matches =re.finditer(CMP_PATTERN_WITH_DIGITAL_FRACTION_RANGE, text)
     # for m in matches:

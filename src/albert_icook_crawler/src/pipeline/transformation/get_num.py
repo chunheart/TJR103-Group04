@@ -2,6 +2,8 @@ from src.pipeline.utils import num_regex_pattern as rep
 
 from decimal import Decimal, ROUND_HALF_UP
 
+from src.pipeline.utils.num_regex_pattern import FRACTION_SYMBOL_NUM_MAPS
+
 """
 README:
 This util is to process the filed of quantity and it mainly separate the values into the number part and the unit part.
@@ -9,8 +11,29 @@ Basically, The data type of the number part is decimal; the unit part is string
 """
 
 
+fraction_pattern = '|'.join(rep.re.escape(k) for k in FRACTION_SYMBOL_NUM_MAPS.keys())
+FRACTION_PATTERN_SET = r'[\u00BC-\u00BE\u2150-\u215E]'
+PATTERN_OPTIMIZED = rf'(\d*\s*{FRACTION_PATTERN_SET}?)\s*(.+)'
+
+
+def _replace_fraction(match):
+    return FRACTION_SYMBOL_NUM_MAPS.get(match.group(0), '')
+
+def extract_and_convert(text: str) -> float | None:
+    match = rep.re.search(PATTERN_OPTIMIZED, text)
+    value_raw = match.group(1).strip()
+    value_without_space = value_raw.replace(' ', '')
+    temp_float_str = rep.re.sub(fraction_pattern, _replace_fraction, value_without_space)
+    try:
+        final_value = float(temp_float_str)
+        return final_value
+
+    except ValueError:
+        return None
+
+
 """The below is to get the number part"""
-def get_num_in_field_quantity(text: str) -> float | str | None:
+def get_num_field_quantity(text: str) -> float | str | None:
     """
     Separate the number and thr unit, and mainly fetch the number
     """
@@ -35,6 +58,12 @@ def get_num_in_field_quantity(text: str) -> float | str | None:
                 matches = rep.CMP_PATTERN_WITH_DIGITAL_FRACTION_WITHOUT_RANGE.finditer(text) # bool
                 if matches is not None:
                     return match_num_with_digit(matches)
+
+            elif any(sep in text for sep in ("½", "⅓", "⅔", "¼", "¾", "⅕")):
+                extract_and_convert(text) # bool
+                if matches is not None:
+                    return match_num_with_digit(matches)
+
             else: # not a fraction
                 matches = rep.CMP_PATTERN_WITH_DIGITAL_WITHOUT_RANGE.finditer(text)
                 if matches is not None:
@@ -239,9 +268,14 @@ def match_num_with_chinese_range(matches) -> float | Decimal | str | None:
             print(e)
     return None
 
-# "1kg", "1.2kg", "1-2 kg", "1/2-1kg","1/3-1/2kg", "1.1-1.2kg", "一kg", "一～二kg", "三分之一~二分之一公斤"
-# if __name__ == "__main__":
-#     tests = ["三分之一~二分之一公斤"]
-#     for test in tests:
-#         ans = get_num_in_field_quantity(test)
-#         print(ans, type(ans))
+if __name__ == '__main__':
+    text = "1½匙"
+    matches = rep.CMP_PATTERN_WITH_FRACTION_SYMBOL_WITHOUT_RANGE.finditer(text)
+    for m in matches:
+        num = m.group(1)
+        unit = m.group(2)
+
+        for _ in num:
+            if _ in FRACTION_SYMBOL_NUM_MAPS:
+                num = FRACTION_SYMBOL_NUM_MAPS[_]
+                x
