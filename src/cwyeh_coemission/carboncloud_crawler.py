@@ -9,7 +9,9 @@ import requests
 from bs4 import BeautifulSoup
 
 """
-TBA
+Query and Crawl from https://apps.carboncloud.com/climatehub/search?q=tofu
+Notes
+- some query may fail, ex: chicken can't be found
 """
 
 def parse_hits_product(search_api_res_data:list) -> list : 
@@ -29,7 +31,7 @@ def parse_hits_product(search_api_res_data:list) -> list :
     return parsed_data
 
 
-def carboncloud_crawler(query_list:list) -> pd.DataFrame:
+def carboncloud_crawler(query_list:list,max_pages_per_item=3) -> None | pd.DataFrame:
     """
     Crawl co emission from https://apps.carboncloud.com/climatehub/search?q=bagel
         using their search api: https://api.carboncloud.com/v0/search
@@ -73,31 +75,41 @@ def carboncloud_crawler(query_list:list) -> pd.DataFrame:
         res_data = res.json()
         res_total_hits_count = res_data['totalHitCount']
         total_pages = math.ceil(res_total_hits_count/20)
-        print(f'Find {res_total_hits_count} products. {total_pages} pages to be collected')
+        total_pages = min(total_pages,max_pages_per_item)
+        print(f'Find {res_total_hits_count} products. {total_pages} pages to be collected (limited by max {max_pages_per_item} pages)')
+        if res_total_hits_count < 1:
+            continue
 
         ### collect by page
         collected_prod = []
-        for i in range(1,total_pages + 1):
-            if i == 1:
-                collected_prod += parse_hits_product(res_data)
-            else:
-                page_at = i
-                search_api_url = f'https://api.carboncloud.com/v0/search?q={query_item}&limit={page_size}&offset={(page_at-1)*20}'
-                print('GET search API:',search_api_url)
-                time.sleep(random.choice([0.5,1,3]))
-                res = requests.get(search_api_url, headers=headers, timeout=20)
-                res_data = res.json()
-                collected_prod += parse_hits_product(res_data)
-        
-        ### to df & basic clean data
-        query_df = pd.DataFrame(collected_prod)
-        query_df['query'] = query_item  #lowered
-        query_df['prod_name'] = query_df['prod_name'].str.lower()
-        filter_name_contain_q = query_df.apply(lambda x: x["query"] in x["prod_name"], axis=1)
-        query_df = query_df[filter_name_contain_q]
-        query_df_collect.append(query_df)
+        try:
+            for i in range(1,total_pages + 1):
+                if i == 1:
+                    collected_prod += parse_hits_product(res_data)
+                else:
+                    page_at = i
+                    search_api_url = f'https://api.carboncloud.com/v0/search?q={query_item}&limit={page_size}&offset={(page_at-1)*20}'
+                    print('GET search API:',search_api_url)
+                    time.sleep(random.choice([0.5,1,3]))
+                    res = requests.get(search_api_url, headers=headers, timeout=20)
+                    res_data = res.json()
+                    collected_prod += parse_hits_product(res_data)
+            
+            ### to df & basic clean data
+            query_df = pd.DataFrame(collected_prod)
+            query_df['query'] = query_item  #lowered
+            query_df['prod_name'] = query_df['prod_name'].str.lower()
+            filter_name_contain_q = query_df.apply(lambda x: x["query"] in x["prod_name"], axis=1)
+            query_df = query_df[filter_name_contain_q]
+            query_df_collect.append(query_df)
+        except:
+            print(f'[Warning] Fail to crawl and fetch {query_item}')
 
-    return pd.concat(query_df_collect)
+    if not query_df_collect:
+        ### return what if nothing found
+        return
+    else:
+        return pd.concat(query_df_collect)
 
 
 def test_main():

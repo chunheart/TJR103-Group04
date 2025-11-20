@@ -5,6 +5,7 @@ import time
 import os
 import shutil
 import glob
+from difflib import SequenceMatcher
 
 import numpy as np
 import pandas as pd
@@ -22,7 +23,7 @@ Utils for mysql ETL, CRUD.
 """
 
 # GLOBALs ------------------------------------------------------------
-TRANS_API_KEY = os.getenv("MY_VAR")
+TRANS_API_KEY = os.getenv("MY_GOOGLE_TRANS_API_KEY")
 
 
 ### Helpers
@@ -30,9 +31,11 @@ def get_normalize(ori_ingredient_name: str) -> str:
     """回傳正規化後的食材名稱（暫時直接回原名或做簡單標準化）"""
     return ori_ingredient_name[-2:]
 
+
 def query_unit2gram(ori_ingredient_name: str, unit_name: str) -> float | None:
     """查詢該食材 + 單位對應的克重；查不到回 None"""    
     return random.uniform(0,200)
+
 
 def translate(qlist: list[str], key, target_lang: str = "zh-TW") -> list[str]:
     """
@@ -51,14 +54,50 @@ def translate(qlist: list[str], key, target_lang: str = "zh-TW") -> list[str]:
     res_list = [r['translatedText'] for r in tar_json]
     return res_list
 
-def query_coemission(nor_ingredient_name: str) -> dict | None:
+
+def query_coemission(nor_ingredient_name: list[str]) -> dict:
     """
     查詢碳排係數，回 dict 或 None。
-    範例回傳結構：{'coe_source': 'FAO', 'coe_category': 'Vegetable', 'weight_g2g': 0.25}
+    範例回傳結構：{'beef': {'coe_values':100,'coe_status':'done'}, 'poork':{'coe_values':None,'coe_status':'error'}}
+    
+    Backlog
+    - modify error control
     """
-    # res = my_crawl()
-    res = {'coe_source': 'carboncloud', 'coe_category': 'some food', 'weight_g2g': random.uniform(0,50)}
-    return res
+        
+    ### translate - mapping
+    eng_to_query = translate(
+        qlist=nor_ingredient_name,
+        key=TRANS_API_KEY,
+        target_lang='EN',
+    )
+    eng_to_query = [s.lower().strip() for s in eng_to_query]
+    print(eng_to_query)
+
+    ### crawl and get res (pd.Dataframe)
+    res = cbc.carboncloud_crawler(query_list=eng_to_query)
+    try:
+        if res == None:
+            print('[Warning] On crawling fail, return pre-defined data')
+            res = pd.DataFrame({"query": nor_ingredient_name,"eng_query":eng_to_query,"coe_values":None,"coe_status":'error',})
+            return res.set_index("query").to_dict(orient="index")
+    except:
+        pass
+
+    ### clean response carbon data [keep 1 for each query]
+    filter_if_contain = res.apply(lambda r: r["query"] in r["prod_name"],axis=1)
+    cleaned_res = res[filter_if_contain]
+    cleaned_res['score'] = cleaned_res.apply(lambda r: SequenceMatcher(None, r['query'], r['prod_name']).ratio(),axis=1)
+    cleaned_res = cleaned_res.sort_values(["query", "score"], ascending=[True, False]).groupby("query").head(3)
+    cleaned_res = cleaned_res.groupby("query", as_index=False)["total_coe"].mean()\
+            .rename(columns={"total_coe":"coe_values","query":"eng_query"})
+
+    ### combine, set status
+    main_df = pd.DataFrame({"query": nor_ingredient_name,"eng_query":eng_to_query})
+    main_df = main_df.merge(cleaned_res,on='eng_query',how="left")
+    main_df['coe_status'] = np.where(main_df["coe_values"].isnull(), "error", "done")
+    main_df['coe_values'] = np.where(main_df["coe_values"].isnull(), None, main_df['coe_values'])
+    return main_df.set_index("query").to_dict(orient="index")
+
 
 def get_where_in_string(a, warp_with_string=True):
     """transform an array into a string of where-in expr"""
@@ -66,6 +105,7 @@ def get_where_in_string(a, warp_with_string=True):
         return ','.join(map(lambda x: '"'+str(x)+'"', a))
     else:
         return ','.join(map(str,a))
+
 
 def batch_operator(batch_size,func):
     pass
@@ -87,7 +127,7 @@ def get_mysql_connection(
         HOST = "mysql"
         PORT = 3306
         USER = "root"
-        PASSWORD = "pas4word"
+        PASSWORD = "<your password>"
     """
     # === 嘗試連線 ===
     conn = pymysql.connect(
@@ -95,9 +135,9 @@ def get_mysql_connection(
             port=port,
             user=user,
             password=password,
-            charset="utf8mb4",
-            connect_timeout=5,
-            cursorclass=pymysql.cursors.DictCursor,
+            charset=charset,
+            connect_timeout=connect_timeout,
+            cursorclass=cursorclass,
         )
     if db:
         try:
@@ -194,6 +234,7 @@ def init_tables(
             CREATE TABLE IF NOT EXISTS `carbon_emission` (
                 `coe_source`          VARCHAR(100),
                 `nor_ingredient_name` VARCHAR(255),
+                `ref_ingredient_name` VARCHAR(255) DEFAULT null,
                 `publish_time`        DATETIME,
                 `crawl_time`          DATETIME,
                 `coe_category`        VARCHAR(100),
@@ -419,10 +460,13 @@ def get_recipe_data(
         return results
 
 
-def get_coemission_data(source='myemission'):
+def get_coemission_data(source='myemission',translate_api_key=TRANS_API_KEY) -> list[dict]:
     """
     get and clean data from several carbon emission site
     - this is likely to be an one-time task
+
+    Backlog
+    - the dumpped data should also pass a normalize layer
     """
     if source=='myemission':
 
@@ -431,7 +475,6 @@ def get_coemission_data(source='myemission'):
         print('Crawl Done')
         
         ### batch translate (EN -> zh-TW)
-        # - should I also check normalize?
         size = myemission_df.shape[0]
         batch_size = 20
         batch = math.ceil(size/batch_size)
@@ -440,7 +483,7 @@ def get_coemission_data(source='myemission'):
             qlist = list(myemission_df['name'].iloc[b*batch_size:(b+1)*batch_size])
             res_list = translate(
                 qlist=qlist,
-                key=TRANS_API_KEY,
+                key=translate_api_key,
                 target_lang='zh-TW',
             )
             trans_name += res_list
@@ -452,8 +495,8 @@ def get_coemission_data(source='myemission'):
         myemission_df['coe_source'] = 'myemission'
         myemission_df['publish_time'] = dt.datetime.now().isoformat()
         myemission_df['crawl_time'] = dt.datetime.now().isoformat()
-        myemission_df = myemission_df.rename(columns = {'category':'coe_category','emissions':'weight_g2g'})
-        myemission_df = myemission_df[['coe_source','nor_ingredient_name','publish_time','crawl_time','coe_category','weight_g2g']]
+        myemission_df = myemission_df.rename(columns = {'category':'coe_category','emissions':'weight_g2g','name':'ref_ingredient_name'})
+        myemission_df = myemission_df[['coe_source','nor_ingredient_name','ref_ingredient_name','publish_time','crawl_time','coe_category','weight_g2g']]
         print('Clean Done')
         
         return json.loads(myemission_df.to_json(orient='records'))
@@ -760,9 +803,11 @@ def register_coemission(conn, coe_json: list[dict]):
     ### Insert (Upsert)
     sql = """
     INSERT INTO `carbon_emission`
-      (`coe_source`,`nor_ingredient_name`,`publish_time`,`crawl_time`,`coe_category`,`weight_g2g`,`coe_status`)
-    VALUES (%s, %s, %s, %s, %s, %s, %s)
+      (`coe_source`,`nor_ingredient_name`,`ref_ingredient_name`,`publish_time`,
+       `crawl_time`,`coe_category`,`weight_g2g`,`coe_status`)
+    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
     ON DUPLICATE KEY UPDATE
+      `ref_ingredient_name` = VALUES(`ref_ingredient_name`),
       `publish_time` = VALUES(`publish_time`),
       `crawl_time`   = VALUES(`crawl_time`),
       `coe_category`  = VALUES(`coe_category`),
@@ -772,6 +817,7 @@ def register_coemission(conn, coe_json: list[dict]):
     ins_values = [(
         row['coe_source'],
         row['nor_ingredient_name'],
+        row['ref_ingredient_name'],
         row['publish_time'],
         row['crawl_time'],
         row['coe_category'],
@@ -900,20 +946,16 @@ def update_coemission_w_query(conn):
     ### 2. query coemission
     update_values = []
     for row in rows:
-        coe_values = query_coemission(row["nor_ingredient_name"])
-        if coe_values is None:
-            new_status = "error"
-        else:
-            new_status = "done"
+        coe_values = query_coemission([row["nor_ingredient_name"]])
         update_values.append((
-            coe_values['coe_source'],
-            coe_values['coe_category'],
-            coe_values['weight_g2g'],
+            'carboncloud',
+            None,
+            coe_values[row["nor_ingredient_name"]]['coe_values'],
             dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            new_status, 
+            coe_values[row["nor_ingredient_name"]]['coe_status'], 
             row["nor_ingredient_name"]
         ))
-    
+
     ### 3. update
     with conn.cursor() as cur:
         sql ="""
