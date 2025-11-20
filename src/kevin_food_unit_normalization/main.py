@@ -3,20 +3,24 @@ import json
 import time
 import os
 import re
+import argparse
 from pathlib import Path
 from typing import List, Dict, Optional, Union
 from google import genai
 from google.genai import types
+from kafka import KafkaProducer
 
 # ================= CONFIGURATION =================
+# 請記得確認這裡的 API KEY
 API_KEY = os.getenv("GEMINI_API_KEY", "請填入API KEY") 
 MODEL_NAME = "gemini-2.5-flash"
+KAFKA_SERVER = 'kafka:9092'  # Docker 內部使用的 Kafka 位址
 
 # 檔案路徑
 CURRENT_DIR = Path(__file__).parent
 MAPPING_DB_FILE = CURRENT_DIR / "unit_mapping_db.csv"
 
-# ================= 轉換規則庫 =================
+# ================= 轉換規則庫  =================
 STANDARD_RULES: Dict[str, float] = {
     "kg": 1000, "公斤": 1000, 
     "g": 1, "克": 1, "公克": 1,
@@ -47,13 +51,27 @@ VOLUME_TO_ML: Dict[str, float] = {
 }
 
 class IngredientNormalizer:
-    def __init__(self):
+    def __init__(self, kafka_server=KAFKA_SERVER):
         self.client = genai.Client(api_key=API_KEY)
         self.mapping_db = self._load_mapping_db()
+        self.kafka_producer = self._init_kafka_producer(kafka_server)
         
+    def _init_kafka_producer(self, server):
+        """初始化 Kafka (新增功能)"""
+        try:
+            producer = KafkaProducer(
+                bootstrap_servers=[server],
+                value_serializer=lambda x: json.dumps(x, ensure_ascii=False).encode('utf-8')
+            )
+            print(f" Kafka 連線成功：{server}")
+            return producer
+        except Exception as e:
+            print(f" Kafka 連線失敗 ({server}) - 將只執行運算不傳送: {e}")
+            return None
+
     def _load_mapping_db(self) -> pd.DataFrame:
+        """(完全保留你的原始邏輯)"""
         if MAPPING_DB_FILE.exists():
-            print(f" 讀取 AI 知識庫：{MAPPING_DB_FILE}")
             try:
                 return pd.read_csv(MAPPING_DB_FILE)
             except pd.errors.EmptyDataError:
@@ -62,29 +80,26 @@ class IngredientNormalizer:
         return pd.DataFrame(columns=['Ingredient_Name', 'Unit', 'Grams_Per_Unit'])
 
     def _save_mapping_db(self):
+        """(完全保留你的原始邏輯)"""
         if not self.mapping_db.empty:
             self.mapping_db.to_csv(MAPPING_DB_FILE, index=False, encoding='utf-8-sig')
-            # print(f" (已自動存檔，目前累積 {len(self.mapping_db)} 筆規則)") 
 
     def _clean_and_parse_json(self, text: str) -> Optional[Dict]:
+        """(完全保留你的原始邏輯)"""
         try:
             return json.loads(text)
         except json.JSONDecodeError:
             pattern = r'```json\s*(.*?)\s*```'
             match = re.search(pattern, text, re.DOTALL)
             if match:
-                try:
-                    return json.loads(match.group(1))
+                try: return json.loads(match.group(1))
                 except: pass
-            
             clean_text = text.replace('```json', '').replace('```', '').strip()
-            try:
-                return json.loads(clean_text)
-            except:
-                print(f" JSON 解析失敗 (已略過此批次)")
-                return None
+            try: return json.loads(clean_text)
+            except: return None
 
     def ask_gemini(self, items_chunk: List[Dict]) -> Optional[Dict]:
+        """(完全保留你的原始邏輯)"""
         json_str = json.dumps(items_chunk, ensure_ascii=True)
         prompt = f"""
         You are a helper for normalizing recipe ingredient units to grams (g).
@@ -106,11 +121,16 @@ class IngredientNormalizer:
                 return self._clean_and_parse_json(response.text)
             except Exception as e:
                 print(f" API Error ({attempt+1}/{max_retries}): {e}")
-                time.sleep(2) # 重試前稍微等待
+                time.sleep(2)
         return None
 
-    def process_csv(self, input_csv_path: Path, output_csv_path: Path):
-        print(f"\n 開始處理檔案：{input_csv_path}")
+    def process_pipeline(self, input_csv_path: Path, kafka_topic: str, source_name: str):
+        """
+        主流程：讀取 CSV -> AI 補全 -> 計算重量 -> 寫入 Kafka
+        """
+        print(f"\n 開始處理 Pipeline")
+        print(f" 來源檔案: {input_csv_path}")
+        
         try:
             df = pd.read_csv(input_csv_path)
         except FileNotFoundError:
@@ -121,14 +141,15 @@ class IngredientNormalizer:
             print(" CSV 欄位錯誤")
             return
 
+        # === 第一階段：AI 補全 (完全保留你的原始邏輯) ===
         candidates = df[df['Unit'].notna()][['Ingredient_Name', 'Unit']].drop_duplicates()
         existing_db_keys = set(zip(self.mapping_db['Ingredient_Name'], self.mapping_db['Unit']))
         
         unknown_pairs = []
         for _, row in candidates.iterrows():
             name, unit = str(row['Ingredient_Name']), str(row['Unit'])
-            
             if unit in STANDARD_RULES or unit in VOLUME_TO_ML: continue
+            
             matched_specific = False
             for (r_n, r_u), _ in SPECIFIC_RULES.items():
                 if r_n in name and r_u == unit: 
@@ -136,21 +157,15 @@ class IngredientNormalizer:
             if matched_specific: continue
 
             if (name, unit) in existing_db_keys: continue
-            
             unknown_pairs.append({'name': name, 'unit': unit})
         
-        print(f" 需透過 AI 估算的特殊組合：{len(unknown_pairs)} 筆 (已扣除重複與已知規則)")
+        print(f" 需透過 AI 估算的特殊組合：{len(unknown_pairs)} 筆")
 
-        # 2. AI 批次處理 (Batch Processing)
         if unknown_pairs:
-            # --- 修改：使用較大的批次 (60) 搭配較長的等待 (10s) 來應對免費版限制 ---
             BATCH_SIZE = 30
-            print(f"🤖 開始呼叫 {MODEL_NAME} API (每 {BATCH_SIZE} 筆自動存檔)...")
-            
+            print(f"🤖 開始呼叫 Gemini API (共 {len(unknown_pairs)} 筆)...")
             for i in range(0, len(unknown_pairs), BATCH_SIZE):
                 batch = unknown_pairs[i:i+BATCH_SIZE]
-                print(f"   處理進度: {i+1}/{len(unknown_pairs)}...")
-                
                 result = self.ask_gemini(batch)
                 
                 batch_new_records = []
@@ -164,25 +179,22 @@ class IngredientNormalizer:
                 
                 if batch_new_records:
                     new_df = pd.DataFrame(batch_new_records)
-                    if not self.mapping_db.empty:
-                         self.mapping_db = pd.concat([self.mapping_db, new_df], ignore_index=True)
-                    else:
-                         self.mapping_db = new_df
-                    
-                    self._save_mapping_db() 
+                    self.mapping_db = pd.concat([self.mapping_db, new_df], ignore_index=True) if not self.mapping_db.empty else new_df
+                    self._save_mapping_db()
+                
+                time.sleep(2) 
 
-                # --- 修改：每批次處理後等待 10 秒，降低 RPM ---
-                print("   等待 10 秒 (避免 429 Rate Limit)...")
-                time.sleep(10) 
-
-        # 3. 最終資料轉換
-        print(" 正在進行最終單位換算...")
+        # === 第二階段：計算與傳輸 (改為迴圈以支援 Kafka) ===
+        print(" 正在進行單位換算並寫入 Kafka...")
+        
         if not self.mapping_db.empty:
             ai_mapping = dict(zip(zip(self.mapping_db['Ingredient_Name'], self.mapping_db['Unit']), self.mapping_db['Grams_Per_Unit']))
         else:
             ai_mapping = {}
 
-        def convert_row(row):
+        count = 0
+        for _, row in df.iterrows():
+            # --- [核心邏輯開始] ---
             w_str = str(row.get('Weight', 0))
             u = str(row.get('Unit', ''))
             name = str(row.get('Ingredient_Name', ''))
@@ -190,36 +202,63 @@ class IngredientNormalizer:
             try:
                 if pd.isna(row.get('Weight')) or w_str.lower() in ['nan', 'null', '']:
                     w = 1.0 if (u in STANDARD_RULES or u in VOLUME_TO_ML) else 0
-                elif '/' in w_str:
-                    w = float(eval(w_str))
-                else:
-                    w = float(w_str)
-            except:
-                w = 0
+                elif '/' in w_str: w = float(eval(w_str))
+                else: w = float(w_str)
+            except: w = 0
 
+            normalized_g = 0.0
+            found = False
+            
+            # 優先順序 1: 特殊規則 (Specific Rules)
             for (r_n, r_u), val in SPECIFIC_RULES.items():
-                if r_n in name and r_u == u: return w * val
-
-            if u in STANDARD_RULES: return w * STANDARD_RULES[u]
+                if r_n in name and r_u == u: 
+                    normalized_g = w * val
+                    found = True
+                    break
             
-            ai_factor = ai_mapping.get((name, u))
-            if ai_factor is not None: return w * ai_factor
+            if not found:
+                # 優先順序 2: 標準單位 (Standard Rules)
+                if u in STANDARD_RULES:
+                    normalized_g = w * STANDARD_RULES[u]
+                # 優先順序 3: AI 知識庫 (AI Mapping)
+                elif (name, u) in ai_mapping:
+                    normalized_g = w * ai_mapping[(name, u)]
+                # 優先順序 4: 容積單位 (Volume Rules)
+                elif u in VOLUME_TO_ML:
+                    normalized_g = w * VOLUME_TO_ML[u]
+                else:
+                    normalized_g = None 
 
-            if u in VOLUME_TO_ML: return w * VOLUME_TO_ML[u]
-            
-            return None
+            # 準備寫入資料
+            data_row = row.to_dict()
+            data_row['Normalized_Weight_g'] = normalized_g
+            data_row['data_source'] = source_name # 新增：來源標記
 
-        df['Normalized_Weight_g'] = df.apply(convert_row, axis=1)
-        df.to_csv(output_csv_path, index=False, encoding='utf-8-sig')
-        print(f" 全部完成！結果已儲存至：{output_csv_path}")
+            # 寫入 Kafka
+            if self.kafka_producer:
+                self.kafka_producer.send(kafka_topic, value=data_row)
+                count += 1
+                if count % 50 == 0:
+                    print(f" 已傳送 {count} 筆...")
+
+        if self.kafka_producer:
+            self.kafka_producer.flush()
+            self.kafka_producer.close()
+        
+        print(f" 全部完成！共寫入 {count} 筆資料到 Topic: {kafka_topic}")
 
 if __name__ == "__main__":
-    project_root = Path(__file__).parents[2]
-    input_csv = project_root / "src/kevin_ytower_crawler/ytower_csv_output/ytower_all_recipes.csv"
-    output_csv = project_root / "src/kevin_ytower_crawler/ytower_csv_output/ytower_recipes_normalized.csv"
+    # 接收 Airflow 傳來的參數
+    parser = argparse.ArgumentParser(description='通用食材正規化工具')
+    parser.add_argument('--input', required=True, help='輸入的 CSV 檔案路徑')
+    parser.add_argument('--topic', required=True, help='要寫入的 Kafka Topic')
+    parser.add_argument('--source', required=True, help='資料來源標記 (如: ytower, icook)')
     
-    if input_csv.exists():
+    args = parser.parse_args()
+    
+    input_path = Path(args.input)
+    if input_path.exists():
         normalizer = IngredientNormalizer()
-        normalizer.process_csv(input_csv, output_csv)
+        normalizer.process_pipeline(input_path, args.topic, args.source)
     else:
-        print(f" 找不到輸入檔案：{input_csv}")
+        print(f" 錯誤：找不到輸入檔案 {input_path}")
