@@ -1,21 +1,22 @@
 import pandas as pd
 import os, sys
 import re
-from src.pipeline.transformation.get_unit import get_unit_field_quantity as unit
 import src.utils.mongodb_connection as mondb
 from src.utils.get_logger import get_logger
+from src.pipeline.transformation.get_num import get_num_field_quantity as num
+from src.pipeline.transformation.get_unit import get_unit_field_quantity as unit
 from pathlib import Path
 from datetime import datetime
 
 
 FILENAME = os.path.basename(__file__).split(".")[0]
 LOG_ROOT_DIR = Path(__file__).resolve().parents[3] # root is dir src
-LOG_FILE_DIR = LOG_ROOT_DIR / "logs" / f"logs={datetime.today().date()}"
+LOG_FILE_DIR = LOG_ROOT_DIR / "logs" / f"logs=2025-11-19"
 LOG_FILE_DIR.mkdir(parents=True, exist_ok=True)
-LOG_FILE_PATH = LOG_FILE_DIR /  f"{FILENAME}_{datetime.today().date()}.log"
+LOG_FILE_PATH = LOG_FILE_DIR /  f"{FILENAME}_2025-11-19.log"
 
 CSV_ROOT_DIR = Path(__file__).resolve().parents[4]
-CSV_FILE_PATH = CSV_ROOT_DIR / "data" / "daily" / f"Created_on_{datetime.today().date()}" / f"icook_recipe_{datetime.today().date()}.csv"
+CSV_FILE_PATH = CSV_ROOT_DIR / "data" / "daily" / f"Created_on_2025-11-19" / f"icook_recipe_2025-11-19.csv"
 DATABASE = "mydatabase"
 COLLECTION = "recipe_ingredients"
 
@@ -35,6 +36,14 @@ def unwind(df:pd.DataFrame, col_name:str)-> pd.DataFrame | None:
         .assign(ingredients=lambda x: x[col_name].str.strip())
     )
     return df_exploded
+
+def unit_g_convertion(s:str)-> str:
+    if s == "克" or s == "公克":
+        return "g"
+    elif s == "公斤":
+        return "kg"
+    else:
+        return s
 
 
 def main():
@@ -93,7 +102,7 @@ def main():
         with open(file=CSV_FILE_PATH, mode="r", encoding="utf-8-sig") as csv:
             raw_df = pd.read_csv(csv)
             logger.info(f"Opened CSV file: {str(CSV_FILE_PATH).split("/")[-1].strip()}")
-        raw_df.info()
+        # raw_df.info()
 
         switch = False
         for col in raw_df.columns:
@@ -116,12 +125,12 @@ def main():
         int_time, upd_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S"), datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         ingredient_df["ins_timestamp"] = int_time
         ingredient_df["upd_timestamp"] = upd_time
-        ingredient_df.info()
+        # ingredient_df.info()
 
         # Drop Null values of field ingredients
         logger.info("Dropping the values that are Null...")
         ingredient_df.dropna(subset=["ingredients"], inplace=True)
-        ingredient_df.info()
+        # ingredient_df.info()
         logger.info("Dropping completed")
 
         # Unwind values of field ingredients
@@ -129,13 +138,20 @@ def main():
 
         # Remove parentheses of values of field ingredients
         ingredient_df_explode["t_ingredients"] = ingredient_df_explode["ingredients"].apply(remove_parentheses)
-        ingredient_df_explode.info()
+        # ingredient_df_explode.info()
 
-        # Separate the quantity to get the number part and the unit part dependently
+        ### Separate the quantity to get the number part and the unit part dependently
+        # Get unit
         ingredient_df_explode["t_unit"] = ingredient_df_explode["quantity"].apply(unit)
-
+        # Get num
+        ingredient_df_explode["t_number"] = ingredient_df_explode["quantity"].apply(num)
+        ingredient_df_explode["t_unit"] = ingredient_df_explode["t_unit"].apply(unit_g_convertion)
         with open(file="test.csv", mode="w", encoding="utf-8-sig", newline="") as csv_file:
             csv_file.write(ingredient_df_explode.to_csv(index=False))
+
+
+
+
     #     # Convert DataFrame into Dict
     #     logger.info("Converting dataframe to list of dictionaries...")
     #     result_list = duplicates_removal_df.to_dict(orient="records")
@@ -160,17 +176,17 @@ def main():
 
 
 if __name__ == "__main__":
-    # main()
-    # data = {
-    #     "type": ["parentheses", "parentheses", "parentheses"],
-    #     "food": ["香料鹽（牛肉用和魚用的不同）", "高麗菜(甘藍)", "福山萵苣(大陸妹)"]
-    # }
-    # df = pd.DataFrame(data)
-    data = ["香料鹽（牛肉用和魚用的不同）"]
-    ans = ""
-    for _ in data:
-        _ = _.strip().replace(" ", "")
-        print(_)
-        t_s = remove_parentheses(_)
-        ans += t_s + "\n"
-    print(ans)
+    main()
+    # # data = {
+    # #     "type": ["parentheses", "parentheses", "parentheses"],
+    # #     "food": ["香料鹽（牛肉用和魚用的不同）", "高麗菜(甘藍)", "福山萵苣(大陸妹)"]
+    # # }
+    # # df = pd.DataFrame(data)
+    # data = ["香料鹽（牛肉用和魚用的不同）"]
+    # ans = ""
+    # for _ in data:
+    #     _ = _.strip().replace(" ", "")
+    #     print(_)
+    #     t_s = remove_parentheses(_)
+    #     ans += t_s + "\n"
+    # print(ans)

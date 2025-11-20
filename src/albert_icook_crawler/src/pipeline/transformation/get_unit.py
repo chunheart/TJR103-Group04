@@ -1,9 +1,9 @@
-import utils_regex_pattern as rep
-from get_num import have_chinese_char_num
+import src.pipeline.utils.num_regex_pattern as rep
+from src.pipeline.transformation.get_num import have_chinese_char_num
 
 
 """The below is to get the number part"""
-def get_unit_in_field_quantity(text: str) -> str | None:
+def get_unit_field_quantity(text: str) -> str | None:
     """
     Separate the number and thr unit, and mainly fetch the number
     """
