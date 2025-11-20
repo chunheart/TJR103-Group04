@@ -29,7 +29,7 @@ def parse_hits_product(search_api_res_data:list) -> list :
     return parsed_data
 
 
-def carboncloud_crawler(query_list:list) -> pd.DataFrame:
+def carboncloud_crawler(query_list:list,max_pages_per_item=3) -> None | pd.DataFrame:
     """
     Crawl co emission from https://apps.carboncloud.com/climatehub/search?q=bagel
         using their search api: https://api.carboncloud.com/v0/search
@@ -73,7 +73,10 @@ def carboncloud_crawler(query_list:list) -> pd.DataFrame:
         res_data = res.json()
         res_total_hits_count = res_data['totalHitCount']
         total_pages = math.ceil(res_total_hits_count/20)
-        print(f'Find {res_total_hits_count} products. {total_pages} pages to be collected')
+        total_pages = min(total_pages,max_pages_per_item)
+        print(f'Find {res_total_hits_count} products. {total_pages} pages to be collected (limited by max {max_pages_per_item} pages)')
+        if res_total_hits_count < 1:
+            continue
 
         ### collect by page
         collected_prod = []
@@ -96,8 +99,12 @@ def carboncloud_crawler(query_list:list) -> pd.DataFrame:
         filter_name_contain_q = query_df.apply(lambda x: x["query"] in x["prod_name"], axis=1)
         query_df = query_df[filter_name_contain_q]
         query_df_collect.append(query_df)
-
-    return pd.concat(query_df_collect)
+    
+    if not query_df_collect:
+        ### return what if nothing found
+        return
+    else:
+        return pd.concat(query_df_collect)
 
 
 def test_main():
