@@ -47,7 +47,7 @@ with DAG(
         task_id="run_normalization",
         bash_command=f"python3 {NORMALIZATION_SCRIPT} --input {OUTPUT_CSV_PATH} --topic ytower_recipes_normalized --source ytower",
         env={
-            "GEMINI_API_KEY": "AIzaSyDUYuNsqyiuXN3PRycIDz0Y8rV1sCx0eIw", 
+            "GEMINI_API_KEY": "填入api key", 
             **os.environ  # 保留系統原本的環境變數 
         }
     )
