@@ -32,20 +32,28 @@ git
 * 以下指令，透過 docker-compose 建立 airflow(py), mysql container
 * airflow(py) container mount airflow/ 下的目錄
 ```shell
-# Build python container
-# docker build -f service/mysql_etl/da_analysis.Dockerfile -t py_analysis:latest .
-# Build airflow-python container
-# docker build -f service/mysql_etl/airflow.Dockerfile -t py_airflow:latest .
+# Build airflow-python container (try to rebuild when updated)
+docker build -f service/mysql_etl/airflow.Dockerfile -t py_airflow:latest .
 
 # set KEYs (for testing purpose)
 export MY_GOOGLE_TRANS_API_KEY = {your key}
+
+# start kafka
+docker-compose -f src/gina_icook_crawler/kafka/docker-compose.yml up -d
 
 # start containers: mysql, airflow-python
 # build image (py_airflow) if not existing
 docker-compose -f service/mysql_etl/docker-compose.yaml up -d
 
-# close containers
+# add py_airflow into kafka's network
+# (hostname the same as container name: kafka-server)
+docker network connect kafka_kafka-net py_airflow
+
+# close containers: mysql, airflow-python
 docker-compose -f service/mysql_etl/docker-compose.yaml down
+
+# close kafka
+docker-compose -f src/gina_icook_crawler/kafka/docker-compose.yml down
 ```
 
 ## 四、Ytower Crawler (楊桃美食網爬蟲)
