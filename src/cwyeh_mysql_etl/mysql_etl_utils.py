@@ -194,6 +194,7 @@ def init_tables(
             CREATE TABLE IF NOT EXISTS `carbon_emission` (
                 `coe_source`          VARCHAR(100),
                 `nor_ingredient_name` VARCHAR(255),
+                `ref_ingredient_name` VARCHAR(255) DEFAULT null,
                 `publish_time`        DATETIME,
                 `crawl_time`          DATETIME,
                 `coe_category`        VARCHAR(100),
@@ -419,10 +420,13 @@ def get_recipe_data(
         return results
 
 
-def get_coemission_data(source='myemission',translate_api_key=TRANS_API_KEY):
+def get_coemission_data(source='myemission',translate_api_key=TRANS_API_KEY) -> list[dict]:
     """
     get and clean data from several carbon emission site
     - this is likely to be an one-time task
+
+    Backlog
+    - the dumpped data should also pass a normalize layer
     """
     if source=='myemission':
 
@@ -431,7 +435,6 @@ def get_coemission_data(source='myemission',translate_api_key=TRANS_API_KEY):
         print('Crawl Done')
         
         ### batch translate (EN -> zh-TW)
-        # - should I also check normalize?
         size = myemission_df.shape[0]
         batch_size = 20
         batch = math.ceil(size/batch_size)
@@ -452,8 +455,8 @@ def get_coemission_data(source='myemission',translate_api_key=TRANS_API_KEY):
         myemission_df['coe_source'] = 'myemission'
         myemission_df['publish_time'] = dt.datetime.now().isoformat()
         myemission_df['crawl_time'] = dt.datetime.now().isoformat()
-        myemission_df = myemission_df.rename(columns = {'category':'coe_category','emissions':'weight_g2g'})
-        myemission_df = myemission_df[['coe_source','nor_ingredient_name','publish_time','crawl_time','coe_category','weight_g2g']]
+        myemission_df = myemission_df.rename(columns = {'category':'coe_category','emissions':'weight_g2g','name':'ref_ingredient_name'})
+        myemission_df = myemission_df[['coe_source','nor_ingredient_name','ref_ingredient_name','publish_time','crawl_time','coe_category','weight_g2g']]
         print('Clean Done')
         
         return json.loads(myemission_df.to_json(orient='records'))
@@ -760,9 +763,11 @@ def register_coemission(conn, coe_json: list[dict]):
     ### Insert (Upsert)
     sql = """
     INSERT INTO `carbon_emission`
-      (`coe_source`,`nor_ingredient_name`,`publish_time`,`crawl_time`,`coe_category`,`weight_g2g`,`coe_status`)
-    VALUES (%s, %s, %s, %s, %s, %s, %s)
+      (`coe_source`,`nor_ingredient_name`,`ref_ingredient_name`,`publish_time`,
+       `crawl_time`,`coe_category`,`weight_g2g`,`coe_status`)
+    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
     ON DUPLICATE KEY UPDATE
+      `ref_ingredient_name` = VALUES(`ref_ingredient_name`),
       `publish_time` = VALUES(`publish_time`),
       `crawl_time`   = VALUES(`crawl_time`),
       `coe_category`  = VALUES(`coe_category`),
@@ -772,6 +777,7 @@ def register_coemission(conn, coe_json: list[dict]):
     ins_values = [(
         row['coe_source'],
         row['nor_ingredient_name'],
+        row['ref_ingredient_name'],
         row['publish_time'],
         row['crawl_time'],
         row['coe_category'],
