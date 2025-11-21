@@ -55,6 +55,7 @@ services:
       PYTHONPATH: "/opt/airflow/src"
       AIRFLOW__WEBSERVER__SHOW_TRIGGER_FORM_IF_NO_PARAMS: "true"
       MY_GOOGLE_TRANS_API_KEY: $MY_GOOGLE_TRANS_API_KEY
+      MY_GEMINI_API_KEY: $MY_GEMINI_API_KEY
 
 volumes:
   mysql_data:
