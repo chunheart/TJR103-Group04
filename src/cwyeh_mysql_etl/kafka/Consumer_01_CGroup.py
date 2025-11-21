@@ -29,17 +29,18 @@ def try_decode_utf8(data):
         return None
 
 
-# 當發生commit時被呼叫
-def print_commit_result(err, partitions):
-    if err:
-        print('# Failed to commit offsets: %s: %s' % (err, partitions))
-    else:
-        for p in partitions:
-            print(
-                'Committed offsets: topic: {}, partition: {}. offset: {}'.format(
-                    p.topic, p.partition, p.offset
-                )
-            )
+# 當發生Re-balance時, 如果有partition被assign時被呼叫
+def print_assignment(consumer, partitions):
+    result = '[{}]'.format(
+        ','.join([p.topic + '-' + str(p.partition) for p in partitions]))
+    print('Setting newly assigned partitions:', result)
+
+
+# 當發生Re-balance時, 之前被assigned的partition會被移除
+def print_revoke(consumer, partitions):
+    result = '[{}]'.format(
+        ','.join([p.topic + '-' + str(p.partition) for p in partitions]))
+    print('Revoking previously assigned partitions: ' + result)
 
 
 if __name__ == '__main__':
@@ -47,26 +48,24 @@ if __name__ == '__main__':
     # Consumer configuration
     # See https://github.com/edenhill/librdkafka/blob/master/CONFIGURATION.md
     props = {
-        'bootstrap.servers': 'localhost:9092',  # Kafka集群在那裡? (置換成要連接的Kafka集群)
-        'group.id': 'iii',  # ConsumerGroup的名稱 (置換成你/妳的學員ID)
-        'auto.offset.reset': 'earliest',
-        # 是否從這個ConsumerGroup尚未讀取的partition/offset開始讀
-        'enable.auto.commit': False,  # 是否啟動自動commit
-        'on_commit': print_commit_result,  # 設定接收commit訊息的callback函數
-        'error_cb': error_cb  # 設定接收error訊息的callback函數
+        'bootstrap.servers': 'kafka-server:29092',  # Kafka集群在那裡? (置換成要連接的Kafka集群)
+        'group.id': 'test',  # ConsumerGroup的名稱 (置換成你/妳的學員ID)
+        'auto.offset.reset': 'earliest',  # Offset從最前面開始
+        'error_cb': error_cb,  # 設定接收error訊息的callback函數
+        'enable.auto.commit': False,
     }
 
     # 步驟2. 產生一個Kafka的Consumer的實例
     consumer = Consumer(props)
     # 步驟3. 指定想要訂閱訊息的topic名稱
-    topicName = 'ak03.test'
+    topicName = 'icook_recipes'
     # 步驟4. 讓Consumer向Kafka集群訂閱指定的topic
-    consumer.subscribe([topicName])
+    consumer.subscribe([topicName], on_assign=print_assignment,
+                       on_revoke=print_revoke)
 
     # 步驟5. 持續的拉取Kafka有進來的訊息
     try:
         while True:
-            records_pulled = False  # 用來檢查是否有有效的record被取出來
             # 請求Kafka把新的訊息吐出來
             records = consumer.consume(num_messages=500, timeout=1.0)  # 批次讀取
             if not records:
@@ -93,7 +92,6 @@ if __name__ == '__main__':
 
                     continue
 
-                records_pulled = True
                 # ** 在這裡進行商業邏輯與訊息處理 **
                 # 取出相關的metadata
                 topic = record.topic()
@@ -105,14 +103,10 @@ if __name__ == '__main__':
                 msgValue = try_decode_utf8(record.value())
 
                 # 秀出metadata與msgKey & msgValue訊息
-                print('{}-{}-{} : ({} , {})'.format(
-                    topic, partition, offset, msgKey, msgValue
+                # print(type(record))
+                print('[{}] {}-{}-{} : ({} , {})'.format(
+                      timestamp, topic, partition, offset, msgKey, msgValue
                 ))
-
-            # 異步地執行commit (Async commit)
-            if records_pulled:
-                consumer.commit()
-
     except KeyboardInterrupt as e:
         sys.stderr.write('Aborted by user\n')
     except Exception as e:
@@ -120,5 +114,4 @@ if __name__ == '__main__':
 
     finally:
         # 步驟6.關掉Consumer實例的連線
-        consumer.commit(asynchronous=False)
         consumer.close()

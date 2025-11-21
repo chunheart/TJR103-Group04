@@ -44,7 +44,7 @@ def parse_hits_product(search_api_res_data:list) -> list :
     return parsed_data
 
 
-def carboncloud_crawler(query_list:list,max_pages_per_item=3) -> None | pd.DataFrame:
+def carboncloud_crawler(query_list:list,max_pages_per_item=2) -> None | pd.DataFrame:
     """
     Crawl co emission from https://apps.carboncloud.com/climatehub/search?q=bagel
         using their search api: https://api.carboncloud.com/v0/search

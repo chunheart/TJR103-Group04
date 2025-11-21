@@ -29,7 +29,7 @@ TRANS_API_KEY = os.getenv("MY_GOOGLE_TRANS_API_KEY")
 ### Helpers
 def get_normalize(ori_ingredient_name: str) -> str:
     """回傳正規化後的食材名稱（暫時直接回原名或做簡單標準化）"""
-    return ori_ingredient_name[-2:]
+    return ori_ingredient_name
 
 
 def query_unit2gram(ori_ingredient_name: str, unit_name: str) -> float | None:
@@ -62,7 +62,7 @@ def query_coemission(nor_ingredient_name: list[str]) -> dict:
     - return example
         {'牛肉': {'eng_query':'beef','coe_values':100,'coe_status':'done'}}
     """
-        
+    
     ### translate - mapping
     eng_to_query = translate(
         qlist=nor_ingredient_name,
@@ -70,15 +70,18 @@ def query_coemission(nor_ingredient_name: list[str]) -> dict:
         target_lang='EN',
     )
     eng_to_query = [s.lower().strip() for s in eng_to_query]
-    print(eng_to_query)
+    print('Query ingredient coemission:',nor_ingredient_name,eng_to_query)
+
+    ### on-fail return
+    fail_res = pd.DataFrame({"query": nor_ingredient_name,"eng_query":eng_to_query,"coe_values":None,"coe_status":'error',})
+    fail_res = fail_res.set_index("query").to_dict(orient="index")
 
     ### crawl and get res (pd.Dataframe)
     res = cbc.carboncloud_crawler(query_list=eng_to_query)
     try:
         if res == None:
             print('[Warning] On crawling fail, return pre-defined data')
-            res = pd.DataFrame({"query": nor_ingredient_name,"eng_query":eng_to_query,"coe_values":None,"coe_status":'error',})
-            return res.set_index("query").to_dict(orient="index")
+            return fail_res
     except:
         pass
 
@@ -86,7 +89,11 @@ def query_coemission(nor_ingredient_name: list[str]) -> dict:
     # (1) prod_name contain in query (2) keep top 3 similar name and avg
     filter_if_contain = res.apply(lambda r: r["query"] in r["prod_name"],axis=1)
     cleaned_res = res[filter_if_contain].copy()  # To avoid [SettingWithCopyWarning]
+    if cleaned_res.shape[0] == 0:
+        print('[Warning] No at least 1 valid record')
+        return fail_res
     cleaned_res['score'] = cleaned_res.apply(lambda r: SequenceMatcher(None, r['query'], r['prod_name']).ratio(),axis=1)
+    cleaned_res['total_coe'] = pd.to_numeric(cleaned_res['total_coe'], errors="coerce")
     cleaned_res = cleaned_res.sort_values(["query", "score"], ascending=[True, False]).groupby("query").head(3)
     cleaned_res = cleaned_res.groupby("query", as_index=False)["total_coe"].mean()\
             .rename(columns={"total_coe":"coe_values","query":"eng_query"})
@@ -514,6 +521,22 @@ def clean_recipe_data(recipe_json:list[dict]) -> list[dict]:
         return
     df = pd.DataFrame(recipe_json)
     
+    ### column mapping
+    df = df.rename(columns={
+        'ID':'recipe_id',
+        'site':'recipe_site',
+        '食譜名稱':'recipe_name',
+        "來源":'recipe_url',
+        '作者':'author',
+        '食用人數':'servings',
+        '類型':'ingredient_type',
+        '名稱':'ingredient_name',
+        '重量':'weight_value',
+        '重量單位':'weight_unit',
+        '上線日期':'publish_date',
+        '爬蟲時間':'crawl_time',
+    })
+
     ### unifiy columns
     need_cols = [
         "recipe_id", "recipe_site", "recipe_name", "recipe_url","author", "servings",
@@ -540,7 +563,8 @@ def clean_recipe_data(recipe_json:list[dict]) -> list[dict]:
         df[c] = pd.to_datetime(df[c], errors="coerce")
         df[c] = df[c].dt.strftime("%Y-%m-%d %H:%M:%S").replace({pd.NaT: None})
 
-    # numbers
+    # numbers (try to extract, convert)
+    df["servings"] = df["servings"].str.extract(r"(\d+)")
     for c in ["servings", "weight_value"]:
         df[c] = pd.to_numeric(df[c], errors="coerce")
         df[c] = df[c].where(df[c] > 0)
