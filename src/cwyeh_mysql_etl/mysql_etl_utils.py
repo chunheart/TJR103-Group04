@@ -12,9 +12,11 @@ import pandas as pd
 import datetime as dt
 import pymysql
 import requests
+from google import genai
 
 import cwyeh_coemission.carboncloud_crawler as cbc
 import cwyeh_coemission.myemission_crawler as mec
+import kevin_food_unit_normalization.main as unor
 
 
 """
@@ -24,6 +26,7 @@ Utils for mysql ETL, CRUD.
 
 # GLOBALs ------------------------------------------------------------
 TRANS_API_KEY = os.getenv("MY_GOOGLE_TRANS_API_KEY")
+GEMINI_API_KEY = os.getenv("MY_GEMINI_API_KEY")
 
 
 ### Helpers
@@ -32,9 +35,28 @@ def get_normalize(ori_ingredient_name: str) -> str:
     return ori_ingredient_name
 
 
-def query_unit2gram(ori_ingredient_name: str, unit_name: str) -> float | None:
-    """查詢該食材 + 單位對應的克重；查不到回 None"""    
-    return random.uniform(0,200)
+def query_unit2gram(pair_list,batch_size=30) -> list:
+    """
+    查詢該食材 + 單位對應的克重
+    pair_list - [{'name':'雞蛋','unit':'顆'},]
+
+    #random.uniform(0,200)
+    """
+
+    class SimpleUnitNormalize(unor.IngredientNormalizer):
+        def __init__(self,key):
+            self.client = genai.Client(api_key=key)
+            self.mapping_db = super()._load_mapping_db()
+    my_nor_unit = SimpleUnitNormalize(key=GEMINI_API_KEY)
+
+    size = len(pair_list)
+    batch = math.ceil(size/batch_size)
+    res_collect = []
+    for b in range(batch):
+        b_res = my_nor_unit.ask_gemini(pair_list[b*batch_size:(b+1)*batch_size])
+        res_collect += b_res.get('items',[])
+    return res_collect
+
 
 
 def translate(qlist: list[str], key, target_lang: str = "zh-TW") -> list[str]:
@@ -923,9 +945,13 @@ def update_unit_w_u2g(conn):
         print(f"Found {len(rows)} pending rows")
     
     ### 2. ingredient_name-unit pair to gram (u2g)
+    unit_pair_to_query = [{'name':row.get("ori_ingredient_name"),'unit':row.get("unit_name")} for row in rows]
+    unit_pair_res = query_unit2gram(unit_pair_to_query)
+    print(unit_pair_res)
+    unit_pair_to_g_map = {(r.get('name'), r.get('unit')):r.get('g_per_unit') for r in unit_pair_res} # dict[(pair):value]
     update_values = []
     for row in rows:
-        u2g_values = query_unit2gram(row["ori_ingredient_name"],row["unit_name"])
+        u2g_values = unit_pair_to_g_map.get((row.get('ori_ingredient_name'),row.get('unit_name')))
         if u2g_values is None:
             new_status = "error"
         else:
