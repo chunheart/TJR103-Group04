@@ -40,21 +40,21 @@ export MY_GOOGLE_TRANS_API_KEY={your key}
 export MY_GEMINI_API_KEY={your key}
 
 # start kafka
-docker-compose -f src/gina_icook_crawler/kafka/docker-compose.yml up -d
+docker compose -f src/gina_icook_crawler/kafka/docker-compose.yml up -d
 
 # start containers: mysql, airflow-python
 # build image (py_airflow) if not existing
-docker-compose -f service/mysql_etl/docker-compose.yaml up -d
+docker compose -f service/mysql_etl/docker-compose.yaml up -d
 
 # add py_airflow into kafka's network
 # (hostname the same as container name: kafka-server)
 docker network connect kafka_kafka-net py_airflow
 
 # close containers: mysql, airflow-python
-docker-compose -f service/mysql_etl/docker-compose.yaml down
+docker compose -f service/mysql_etl/docker-compose.yaml down
 
 # close kafka
-docker-compose -f src/gina_icook_crawler/kafka/docker-compose.yml down
+docker compose -f src/gina_icook_crawler/kafka/docker-compose.yml down
 
 # Misc
 # run icook crawler
