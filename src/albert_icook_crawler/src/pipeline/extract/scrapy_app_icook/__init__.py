@@ -36,7 +36,7 @@ class IcookDailySpider:
                 logging.StreamHandler(sys.stdout)  # 同時輸出到 console（方便在 Airflow log 看）
             ]
         )
-
+        
         self.logger = logging.getLogger(__name__)
         self.logger.info(f"Initialized IcookDailySpider with keyword={self.keyword}")
 
@@ -88,3 +88,4 @@ class IcookDailySpider:
 
 if __name__ == "__main__":
     IcookDailySpider().run()
+
