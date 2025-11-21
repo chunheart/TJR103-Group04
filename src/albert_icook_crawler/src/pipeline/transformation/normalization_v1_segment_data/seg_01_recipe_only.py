@@ -4,18 +4,29 @@ import os, sys
 import src.utils.mongodb_connection as mondb
 from src.pipeline.transformation import get_ppl_num as ppl
 from src.utils.get_logger import get_logger
+
 from pathlib import Path
 from datetime import datetime
-from dotenv import load_dotenv
 
 FILENAME = os.path.basename(__file__).split(".")[0]
-LOG_ROOT_DIR = Path(__file__).resolve().parents[3] # root is dir src
+LOG_ROOT_DIR = Path(__file__).resolve().parents[3] # Root dir : src
 LOG_FILE_DIR = LOG_ROOT_DIR / "logs" / f"logs={datetime.today().date()}"
 LOG_FILE_DIR.mkdir(parents=True, exist_ok=True)
 LOG_FILE_PATH = LOG_FILE_DIR /  f"{FILENAME}_{datetime.today().date()}.log"
 
-CSV_ROOT_DIR = Path(__file__).resolve().parents[4]
-CSV_FILE_PATH = CSV_ROOT_DIR / "data" / "daily" / f"Created_on_{datetime.today().date()}" / f"icook_recipe_{datetime.today().date()}.csv"
+DATABASE = "mydatabase"
+COLLECTION = "recipes"
+
+DATA_ROOT_DIR = Path(__file__).resolve().parents[4] # Root dir : project_footprint_calculation
+CSV_FILE_DIR = DATA_ROOT_DIR / "data" / "daily"
+CSV_FILE_DIR.mkdir(parents=True, exist_ok=True)
+CSV_FILE_PATH = CSV_FILE_DIR / f"Created_on_{datetime.today().date()}" / f"icook_recipe_{datetime.today().date()}.csv"
+
+SAVED_FILE_DIR = DATA_ROOT_DIR / "data" / "db_recipe"
+SAVED_FILE_DIR.mkdir(parents=True, exist_ok=True)
+SAVED_FILE_PATH = SAVED_FILE_DIR / f"icook_recipe_{datetime.today().date()}_{DATABASE}_{COLLECTION}.csv"
+
+logger = get_logger(log_file_path=LOG_FILE_PATH, logger_name=FILENAME)
 
 def main():
     """
@@ -44,8 +55,6 @@ def main():
     - insert transformed data to targeted collection
     - mongodb disconnection
     """
-
-    logger = get_logger(log_file_path=LOG_FILE_PATH, logger_name=FILENAME)
     logger.info(f"Starting execution of {FILENAME}")
 
     logger.info("Connecting to MongoDB...")
@@ -61,7 +70,7 @@ def main():
 
     logger.info("Connecting to Database, mydatabase...")
     try:
-        db = conn["mydatabase"]
+        db = conn[DATABASE]
     except Exception as e:
         logger.error(f"Failed to connect to Database: {e}")
         conn.close()
@@ -69,7 +78,7 @@ def main():
         logger.critical(f"Aborting execution of {FILENAME} due to fatal error")
         sys.exit(1)
 
-    collection = db["recipes"]
+    collection = db[COLLECTION]
     try:
         with open(file=CSV_FILE_PATH, mode="r", encoding="utf-8-sig") as csv:
             raw_df = pd.read_csv(csv)
@@ -102,22 +111,29 @@ def main():
 
         # Remove duplication
         logger.info("Removing duplicates...")
-        duplicates_removal_df = recipe_df.drop_duplicates(subset="recept_id", keep="last",ignore_index=True)
+        duplicates_removal_df = recipe_df.drop_duplicates(subset="recept_id", keep="last", ignore_index=True)
         duplicates_removal_df.info()
         logger.info("Removing duplicates completed")
 
         ### Transform
         # Fill None with "1人份"
+        logger.info("Processing fillna for column, people with 1人份 ...")
         duplicates_removal_df["people"] = duplicates_removal_df["people"].fillna("1人份", inplace=False)
         # Convert number into integer type
         duplicates_removal_df["people"] = duplicates_removal_df["people"].apply(ppl.get_recipe_ppl_num)
+        logger.info("Processed fillna for column, people with 1人份 ...")
         duplicates_removal_df.info()
+
+        ### Save Data into CSV file
+        logger.info(f"Saving data to the path: {SAVED_FILE_PATH}")
+        duplicates_removal_df.to_csv(SAVED_FILE_PATH, index=False)
+        logger.info(f"Saved data to the path: {SAVED_FILE_PATH}")
 
         # Convert DataFrame into Dict
         logger.info("Converting dataframe to list of dictionaries...")
         result_list = duplicates_removal_df.to_dict(orient="records")
 
-        # Load
+        # Load to MongoDB(MySQL)
         try:
             lines = len(result_list)
             collection.insert_many(result_list)
