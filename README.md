@@ -54,6 +54,10 @@ docker-compose -f service/mysql_etl/docker-compose.yaml down
 
 # close kafka
 docker-compose -f src/gina_icook_crawler/kafka/docker-compose.yml down
+
+# Misc
+# run icook crawler
+python src/gina_icook_crawler/daily.py --since "2025-11-18" --before "2025-11-18"
 ```
 
 ## 四、Ytower Crawler (楊桃美食網爬蟲)

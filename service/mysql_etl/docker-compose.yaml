@@ -5,6 +5,7 @@ services:
     restart: unless-stopped
     environment:
       MYSQL_ROOT_PASSWORD: pas4word
+      TZ: Asia/Taipei
     ports:
       - "3307:3306"
     networks:
