@@ -182,6 +182,7 @@ def init_tables(
     db_name='EXAMPLE',
     insert_example_records=True,
     drop_tables_if_exists=False,
+    create_index=True,
 ):
     """
     Initialize of tables in assigned DB
@@ -191,19 +192,18 @@ def init_tables(
     - protection with user_permission !?
     """
 
-    # 建立資料庫
+    ### 建立資料庫
     cursor = conn.cursor()
     cursor.execute(f"CREATE DATABASE IF NOT EXISTS {db_name} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;")
     conn.select_db(db_name)
 
-    # drop_tables_if_exists
+    ### Create tables (DDL)
+    # UNIQUE KEY `uniq_ori_ingredient_name` (`ori_ingredient_name`)
     tables = ["recipe_ingredient", "unit_normalize", "ingredient_normalize", "carbon_emission", "recipe"]
     if drop_tables_if_exists:
         for t in tables:
             cursor.execute(f"DROP TABLE IF EXISTS `{t}`;")
     
-    # create tables (DDL)
-    # UNIQUE KEY `uniq_ori_ingredient_name` (`ori_ingredient_name`)
     ddls = {
         "recipe": """
             CREATE TABLE IF NOT EXISTS `recipe` (
@@ -276,12 +276,29 @@ def init_tables(
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
         """,
     }
-
     for name, ddl in ddls.items():
         print('Create table',name,ddl)
         cursor.execute(ddl)
 
-    ###
+    ### create additional index
+    index_ddls = [
+        """
+        CREATE INDEX idx_u2g_status
+        ON unit_normalize (u2g_status);
+        """,
+        """
+        CREATE INDEX idx_coe_status
+        ON carbon_emission (coe_status);
+        """,
+        """
+        CREATE INDEX idx_normalize_status
+        ON ingredient_normalize (normalize_status);
+        """,
+    ]
+    for ddl in index_ddls:
+        cursor.execute(ddl)
+
+    ### Insert example records
     if insert_example_records:
         cursor.execute("""
             INSERT INTO `recipe`
@@ -751,7 +768,6 @@ def register_coemission_from_recipe(conn, recipe_json: list[dict]):
             """
         cur.execute(sql)
         nor_names = {r["nor_ingredient_name"] for r in cur.fetchall()}
-    print(nor_names)
 
     ### 2. get noramalized name not in carbon_emission
     with conn.cursor() as cur:

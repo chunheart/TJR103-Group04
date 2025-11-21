@@ -137,7 +137,7 @@ def consume_kafka_message(consumer, logger):
             if insert_buffer:
                 # keynote: use generator to separate ingest and write (by batch)
                 yield insert_buffer
-                # commit
+                consumer.commit()
                 insert_buffer.clear()
 
     except Exception as e:
