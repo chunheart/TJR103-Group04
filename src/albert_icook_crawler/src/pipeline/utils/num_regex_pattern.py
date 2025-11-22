@@ -138,8 +138,8 @@ FRACTION_SYMBOL_NUM_MAPS = {
 
 if __name__ == "__main__":
     txt = "1½ kg"
-    extracted = extract_and_convert(txt)
-    print(extracted)
+    # extracted = extract_and_convert(txt)
+    # print(extracted)
     # text = "雞肉"
     # matches =re.finditer(CMP_PATTERN_WITH_DIGITAL_FRACTION_RANGE, text)
     # for m in matches:

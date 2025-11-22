@@ -1,4 +1,4 @@
-import src.utils.mongodb_connection as mongo
+import albert_icook_crawler.src.utils.mongodb_connection as mongo
 import pandas as pd
 
 from datetime import datetime
