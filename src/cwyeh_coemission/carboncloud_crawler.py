@@ -19,19 +19,32 @@ def parse_hits_product(search_api_res_data:list) -> list :
     Parse and extract data from respons of search API
     """
     parsed_data = []
-    for res_prod in search_api_res_data['hits']:
-        rec = {}
-        rec['prod_id'] = res_prod['contents'][0]
-        rec['prod_name'] = res_prod['contents'][1]['productName']
-        rec['total_coe'] = res_prod['contents'][1]['totalFootprint']
-        rec['market'] = res_prod['contents'][1]['market']
-        rec['org'] = res_prod['contents'][1]['orgInfo']['displayName']
-        rec['breakdown_coe'] = json.dumps(res_prod['contents'][1]['footprintBreakdown'])
+    # for res_prod in search_api_res_data['hits']:
+    #     rec = {}
+    #     rec['prod_id'] = res_prod['contents'][0]
+    #     rec['prod_name'] = res_prod['contents'][1]['productName']
+    #     rec['total_coe'] = res_prod['contents'][1]['totalFootprint']
+    #     rec['market'] = res_prod['contents'][1]['market']
+    #     rec['org'] = res_prod['contents'][1]['orgInfo']['displayName']
+    #     rec['breakdown_coe'] = json.dumps(res_prod['contents'][1]['footprintBreakdown'])
+    #     parsed_data.append(rec)
+    for res_prod in search_api_res_data.get("hits", []):
+        c0 = res_prod.get("contents", [{}])[0]
+        c1 = res_prod.get("contents", [{}, {}])[1]
+        rec = {
+            "prod_id": c0,
+            "prod_name": c1.get("productName"),
+            "total_coe": c1.get("totalFootprint"),
+            "market": c1.get("market"),
+            "org": c1.get("orgInfo", {}).get("displayName"),
+            "breakdown_coe": json.dumps(c1.get("footprintBreakdown", {})),
+        }
         parsed_data.append(rec)
+
     return parsed_data
 
 
-def carboncloud_crawler(query_list:list,max_pages_per_item=3) -> None | pd.DataFrame:
+def carboncloud_crawler(query_list:list,max_pages_per_item=2) -> None | pd.DataFrame:
     """
     Crawl co emission from https://apps.carboncloud.com/climatehub/search?q=bagel
         using their search api: https://api.carboncloud.com/v0/search
@@ -94,19 +107,18 @@ def carboncloud_crawler(query_list:list,max_pages_per_item=3) -> None | pd.DataF
                     res = requests.get(search_api_url, headers=headers, timeout=20)
                     res_data = res.json()
                     collected_prod += parse_hits_product(res_data)
+                    print('GET search API done:',search_api_url)
             
             ### to df & basic clean data
             query_df = pd.DataFrame(collected_prod)
             query_df['query'] = query_item  #lowered
             query_df['prod_name'] = query_df['prod_name'].str.lower()
-            filter_name_contain_q = query_df.apply(lambda x: x["query"] in x["prod_name"], axis=1)
-            query_df = query_df[filter_name_contain_q]
             query_df_collect.append(query_df)
         except:
             print(f'[Warning] Fail to crawl and fetch {query_item}')
 
     if not query_df_collect:
-        ### return what if nothing found
+        print(f'[Warning] Fail to crawl and fetch {query_item}')
         return
     else:
         return pd.concat(query_df_collect)

@@ -19,7 +19,7 @@ def print_sth_or_not(res):
 
 # Setting
 default_args = {
-    "owner": "airflow",
+    "owner": "cwyeh",
     "depends_on_past": False,
     "email": ["your_email@example.com"],
     "email_on_failure": False,

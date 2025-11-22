@@ -19,12 +19,12 @@ def print_sth_or_not(res):
 
 # Setting
 default_args = {
-    "owner": "airflow",
+    "owner": "cwyeh",
     "depends_on_past": False,
     "email": ["your_email@example.com"],
     "email_on_failure": False,
     "email_on_retry": False,
-    "retries": 0,
+    "retries": 1,
     "retry_delay": dt.timedelta(minutes=1),
 }
 
