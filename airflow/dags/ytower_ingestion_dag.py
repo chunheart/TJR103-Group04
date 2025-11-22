@@ -28,7 +28,7 @@ with DAG(
     dag_id="ytower_ingestion_pipeline",
     default_args=default_args,
     description="楊桃網食譜爬蟲與正規化 (Phase 1 & 2)",
-    schedule_interval="@daily",
+    schedule_interval=None,            # 設定為 None，「手動觸發」才會跑
     start_date=pendulum.datetime(2023, 11, 20, tz="Asia/Taipei"),
     catchup=False,
     tags=["ytower", "ingestion"],
