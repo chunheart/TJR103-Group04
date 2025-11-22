@@ -1,14 +1,11 @@
 import os, sys
 import pendulum
 
-from src.pipeline.extract.scrapy_app_icook import IcookDailySpider
+from albert_icook_crawler.src.pipeline.extract.scrapy_app_icook import IcookDailySpider
 from airflow import DAG
 from airflow.operators.python import PythonOperator
 from datetime import datetime, timedelta
 
-sys.path.append("/opt/airflow/src/pipeline/extract/scrapy_app_icook")
-os.makedirs("/opt/airflow/data/daily", exist_ok=True)
-os.makedirs("/opt/airflow/logs/scrapy", exist_ok=True)
 
 LOCAL_TZ = pendulum.timezone("Asia/Taipei")
 
@@ -32,8 +29,8 @@ dag = DAG(
     'd_01_get_icook_yesterday_recipe',  #
     default_args=default_args,
     description='Python operators',  #
-    schedule="* 21 * * *",  #
-    start_date=pendulum.datetime(2025, 11, 18, tz="UTC"),
+    schedule="00 5 * * *",  #
+    start_date=pendulum.datetime(2025, 11, 1, tz=LOCAL_TZ),
     catchup=False,
     tags=["scrapy", "icook"]
 )
