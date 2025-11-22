@@ -56,4 +56,4 @@ def close_connection(db_connection):
 if __name__ == "__main__":
     # client = connect_to_online_mongodb()
     # close_connection(client)
-    print(PROJECT_ROOT)
+    pass

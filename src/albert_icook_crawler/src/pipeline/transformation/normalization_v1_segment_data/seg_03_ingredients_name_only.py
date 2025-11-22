@@ -67,7 +67,7 @@ def main():
     3) nor_ingredient_name  varchar(255), 
     4) ins_time` DATETIME DEFAULT CURRENT_TIMESTAMP
     5) upd_time` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    6) status
+    6) normalize_status ENUM('pending','running','done','error','manual') NOT NULL DEFAULT 'pending',
     
     ### Algorithm:
     - establish logging V
@@ -161,7 +161,6 @@ def main():
 
         criteria = ["適量", "少許", "依喜好"]
         ingredient_df_explode.loc[ingredient_df_explode["unit_name"].isin(criteria), "unit_number"] = float(1)
-
 
 
         df_final = pd.DataFrame()
