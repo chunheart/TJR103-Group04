@@ -1,23 +1,41 @@
+import google.generativeai as genai
+import json
+from typing import Tuple, Dict, Optional
 import pandas as pd
 import os, sys
 import re
-from src.pipeline.transformation.get_unit import get_unit_field_quantity as unit
-import src.utils.mongodb_connection as mondb
-from src.utils.get_logger import get_logger
+import albert_icook_crawler.src.utils.mongodb_connection as mondb
+from albert_icook_crawler.src.utils.get_logger import get_logger
+from albert_icook_crawler.src.pipeline.transformation.get_num import get_num_field_quantity as num
+from albert_icook_crawler.src.pipeline.transformation.get_unit import get_unit_field_quantity as unit
 from pathlib import Path
 from datetime import datetime
+from dotenv import load_dotenv
 
+ROOT_DIR = Path(__file__).resolve().parents[4] # Root: /opt/airflow/src/albert_icook_crawler
+ENV_PATH = Path(ROOT_DIR/ "src" / "utils"/ ".env")
+load_dotenv(ENV_PATH)
 
 FILENAME = os.path.basename(__file__).split(".")[0]
-LOG_ROOT_DIR = Path(__file__).resolve().parents[3] # root is dir src
-LOG_FILE_DIR = LOG_ROOT_DIR / "logs" / f"logs={datetime.today().date()}"
+LOG_FILE_DIR = ROOT_DIR / "src" / "logs" / f"logs={datetime.today().date()}"
 LOG_FILE_DIR.mkdir(parents=True, exist_ok=True)
 LOG_FILE_PATH = LOG_FILE_DIR /  f"{FILENAME}_{datetime.today().date()}.log"
 
-CSV_ROOT_DIR = Path(__file__).resolve().parents[4]
-CSV_FILE_PATH = CSV_ROOT_DIR / "data" / "daily" / f"Created_on_{datetime.today().date()}" / f"icook_recipe_{datetime.today().date()}.csv"
-DATABASE = "mydatabase"
+
+CSV_FILE_PATH = ROOT_DIR / "data" / "daily" / f"Created_on_{datetime.today().date()}" / f"icook_recipe_{datetime.today().date()}.csv"
 COLLECTION = "recipe_ingredients"
+
+DATA_ROOT_DIR = Path(__file__).resolve().parents[4]
+SAVED_FILE_DIR = DATA_ROOT_DIR / "data" / "db_ingredients"
+SAVED_FILE_DIR.mkdir(parents=True, exist_ok=True)
+SAVED_FILE_PATH =  SAVED_FILE_DIR / f"icook_recipe_{datetime.today().date()}_{COLLECTION}.csv"
+
+# Gemini Configuration
+API_KEY = os.getenv("API_KEY")
+genai.configure(api_key=API_KEY)
+model = genai.GenerativeModel('gemini-2.5-flash')
+
+logger = get_logger(log_file_path=LOG_FILE_PATH, logger_name=FILENAME)
 
 
 def remove_parentheses(s:str) -> str:
@@ -35,6 +53,213 @@ def unwind(df:pd.DataFrame, col_name:str)-> pd.DataFrame | None:
         .assign(ingredients=lambda x: x[col_name].str.strip())
     )
     return df_exploded
+
+def unit_convertion(s:str)-> str:
+    if s == "克" or s == "公克":
+        return "g"
+    elif s == "公斤":
+        return "kg"
+    elif s == "CC" or s == "毫升" or s == "ml":
+        return "cc"
+    else:
+        return s
+
+
+def extract_metric_priority(quantity_text: str) -> Tuple[Optional[float], Optional[str]]:
+    """
+    Extracts metric weight (g, kg) from the quantity string with high priority.
+    This is crucial for accurate Carbon Footprint calculations.
+
+    Logic:
+        If the string is "2 units / 200g", it ignores "2 units" and returns (200.0, 'g').
+        If the string is "1kg", it returns (1000.0, 'g') or (1.0, 'kg').
+
+    Args:
+        quantity_text (str): The raw quantity string (e.g., "2 pieces/200g").
+
+    Returns:
+        Tuple[float, str]: (unit_number, unit_name) if found, otherwise (None, None).
+    """
+    if pd.isna(quantity_text):
+        return None, None
+
+    text = str(quantity_text).lower().strip()
+
+    # Pattern to find numbers explicitly followed by 'g' or 'kg'
+    # It handles decimals (e.g., 0.5g) and integers (200g)
+    match_metric = re.search(r'(\d+(?:\.\d+)?)\s*(kg|g)', text)
+
+    if match_metric:
+        number = float(match_metric.group(1))
+        unit = match_metric.group(2)
+        return number, unit
+
+    return None, None
+
+
+def get_rows_needing_processing(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Filters rows where 'unit_name' or 'unit_number' is missing.
+    It first attempts to fix them using the Metric Priority Logic.
+    Only rows that remain incomplete are returned for LLM processing.
+
+    Args:
+        df (pd.DataFrame): The dataframe containing recipe data.
+
+    Returns:
+        pd.DataFrame: A subset of the dataframe that still requires LLM inference.
+    """
+    logger.info("[Status] Pre-screening data for metric units...")
+
+    # We work on a copy to avoid SettingWithCopy warnings on the original df temporarily
+    # But since we want to update the original logic flow, we will identify indices.
+    mask = df['unit_name'].isna() | df['unit_number'].isna()
+    target_indices = df[mask].index
+
+    still_missing_indices = []
+
+    for idx in target_indices:
+        qty_text = df.loc[idx, 'quantity']
+
+        # Attempt local regex extraction first (Metric Priority)
+        num, unit = extract_metric_priority(qty_text)
+
+        if num is not None and unit is not None:
+            # If regex found a metric unit, fill it immediately
+            # This saves API costs and ensures precision for carbon calc
+            if pd.isna(df.loc[idx, 'unit_number']):
+                df.loc[idx, 'unit_number'] = num
+            if pd.isna(df.loc[idx, 'unit_name']):
+                df.loc[idx, 'unit_name'] = unit
+        else:
+            # If regex failed, add to list for LLM
+            # Re-check if it is still missing (in case only one field was missing)
+            if pd.isna(df.loc[idx, 'unit_name']) or pd.isna(df.loc[idx, 'unit_number']):
+                still_missing_indices.append(idx)
+
+    result_df = df.loc[still_missing_indices].copy()
+    logger.info(f"[Status] Pre-processing complete. {len(result_df)} rows require LLM inference.")
+    return result_df
+
+
+def construct_hybrid_language_prompt(target_rows: pd.DataFrame) -> str:
+    """
+    Constructs the prompt in English for the LLM, emphasizing carbon footprint requirements.
+
+    Args:
+        target_rows (pd.DataFrame): The subset of data to process.
+
+    Returns:
+        str: The formatted prompt string.
+    """
+    prompt_text = """
+    # Role
+    You are an expert Recipe Data Scientist.
+    Your task is to infer missing 'unit_number' and 'unit_name' from the 'Ingredient' and 'Quantity_Text'.
+
+    # Core Objective
+    We need to standardize units for Carbon Footprint calculation, but keep natural units readable in Chinese.
+
+    # Rules for unit_name Output (CRITICAL)
+    1. **Metric unit_names (Keep English)**: 
+       - If the unit_name is weight or volume, use: 'g', 'kg', 'ml', 'L'.
+    
+    2. **Non-Metric unit_names (Use Traditional Chinese)**:
+       - For all other count-based or rough units, **YOU MUST USE TRADITIONAL CHINESE**.
+       - Examples: 
+         - 'piece' -> '顆' or '個' or '片' (depend on ingredient)
+         - 'pack' -> '包' or '盒'
+         - 'tablespoon' -> '大匙'
+         - 'teaspoon' -> '小匙'
+         - 'strip' -> '條'
+         - 'bunch' -> '束'
+         - 'cup' -> '杯'
+
+    # Logic Priorities
+    1. **Weight Priority**: If the text says "2 pieces / 200g", ignore pieces and output unit_name="g", unit_number=200.0.
+    2. **Fuzzy Conversion**: 
+       - "少許" (Few) -> unit_name="小匙", unit_number=0.25 (Estimate)
+       - "適量" (Moderate) -> Estimate based on ingredient type.
+       - Pure unit_number "6" (for Tomato) -> unit_name="顆", unit_number=6.0
+
+    # Input Data
+    """
+
+    data_lines = []
+    for idx, row in target_rows.iterrows():
+        q_text = str(row['quantity']) if not pd.isna(row['quantity']) else "Empty"
+        line = f"Index: {idx}, Ingredient: {row['ingredients']}, Quantity_Text: '{q_text}'"
+        data_lines.append(line)
+
+    prompt_text += "\n".join(data_lines)
+
+    prompt_text += """
+
+    # Output Format
+    Return a strictly valid JSON object. No markdown.
+    Example:
+    {
+        "46": {"unit_name": "g", "unit_number": 200.0},
+        "47": {"unit_name": "條", "unit_number": 0.5},
+        "48": {"unit_name": "大匙", "unit_number": 1.0}
+    }
+    """
+    return prompt_text
+
+
+def fetch_gemini_response(prompt: str) -> Dict:
+    """
+    Calls the Gemini API and parses the JSON response.
+
+    Args:
+        prompt (str): The constructed prompt.
+
+    Returns:
+        Dict: The parsed JSON dictionary. Returns empty dict on failure.
+    """
+    logger.info("[Status] Calling Gemini API...")
+    try:
+        response = model.generate_content(prompt)
+        cleaned_text = response.text.replace("```json", "").replace("```", "").strip()
+        result = json.loads(cleaned_text)
+        logger.info("[Status] Response parsed successfully.")
+        return result
+    except Exception as e:
+        logger.error(f"[Error] API call or parsing failed: {e}")
+        return {}
+
+
+def update_dataset(df: pd.DataFrame, predictions: Dict) -> Tuple[pd.DataFrame, int]:
+    """
+    Updates the DataFrame with the predictions from LLM.
+
+    Args:
+        df (pd.DataFrame): The original dataframe.
+        predictions (Dict): The dictionary of inferred values.
+
+    Returns:
+        Tuple[pd.DataFrame, int]: Updated dataframe and count of updated rows.
+    """
+    df_updated = df.copy(deep=True)
+    success_count = 0
+
+    logger.info("[Status] Updating dataset...")
+
+    for idx_str, data in predictions.items():
+        try:
+            idx = int(idx_str)
+            if idx in df_updated.index:
+                # Only overwrite if the value is still NaN
+                # (Although our logic ensures we only asked for NaNs, double-check is safe)
+                if pd.isna(df_updated.loc[idx, 'unit_name']):
+                    df_updated.loc[idx, 'unit_name'] = data.get('unit_name')
+                if pd.isna(df_updated.loc[idx, 'unit_number']):
+                    df_updated.loc[idx, 'unit_number'] = data.get('unit_number')
+                success_count += 1
+        except Exception as e:
+            logger.error(f"[Warning] Failed to update Index {idx_str}: {e}")
+
+    return df_updated, success_count
 
 
 def main():
@@ -64,36 +289,35 @@ def main():
     - mongodb disconnection
     """
 
-    logger = get_logger(log_file_path=LOG_FILE_PATH, logger_name=FILENAME)
     logger.info(f"Starting execution of {FILENAME}")
 
-    logger.info("Connecting to MongoDB...")
-    try:
-        conn = mondb.connect_to_local_mongodb()
-    except Exception as e:
-        logger.error(f"Failed to establish MongoDB connection: {e}")
+    # logger.info("Connecting to MongoDB...")
+    # try:
+    #     conn = mondb.connect_to_local_mongodb()
+    # except Exception as e:
+    #     logger.error(f"Failed to establish MongoDB connection: {e}")
 
-        logger.critical(f"Aborting execution of {FILENAME} due to fatal error")
-        sys.exit(1)
+    #     logger.critical(f"Aborting execution of {FILENAME} due to fatal error")
+    #     sys.exit(1)
 
-    logger.info(f"Connected to MongoDB")
+    # logger.info(f"Connected to MongoDB")
 
-    logger.info("Connecting to Database, mydatabase...")
-    try:
-        db = conn[DATABASE]
-    except Exception as e:
-        logger.error(f"Failed to connect to Database: {e}")
-        conn.close()
-        logger.critical(f"Closed connection to MongoDB")
-        logger.critical(f"Aborting execution of {FILENAME} due to fatal error")
-        sys.exit(1)
+    # logger.info("Connecting to Database, mydatabase...")
+    # try:
+    #     db = conn[DATABASE]
+    #     logger.info("Connected to Database, mydatabase...")
+    # except Exception as e:
+    #     logger.error(f"Failed to connect to Database: {e}")
+    #     conn.close()
+    #     logger.critical(f"Closed connection to MongoDB")
+    #     logger.critical(f"Aborting execution of {FILENAME} due to fatal error")
+    #     sys.exit(1)
 
-    collection = db[COLLECTION]
+    # collection = db[COLLECTION]
     try:
         with open(file=CSV_FILE_PATH, mode="r", encoding="utf-8-sig") as csv:
             raw_df = pd.read_csv(csv)
             logger.info(f"Opened CSV file: {str(CSV_FILE_PATH).split("/")[-1].strip()}")
-        raw_df.info()
 
         switch = False
         for col in raw_df.columns:
@@ -110,67 +334,94 @@ def main():
             "recept_type",
             "ingredients",
             "quantity",
-            "unit",
         ]
         ingredient_df = raw_df[mask]
         int_time, upd_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S"), datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         ingredient_df["ins_timestamp"] = int_time
         ingredient_df["upd_timestamp"] = upd_time
-        ingredient_df.info()
 
         # Drop Null values of field ingredients
         logger.info("Dropping the values that are Null...")
         ingredient_df.dropna(subset=["ingredients"], inplace=True)
-        ingredient_df.info()
         logger.info("Dropping completed")
 
         # Unwind values of field ingredients
+        logger.info("Unwinding ...")
         ingredient_df_explode = unwind(ingredient_df, "ingredients")
-
+        logger.info("Unwinding completed")
         # Remove parentheses of values of field ingredients
-        ingredient_df_explode["t_ingredients"] = ingredient_df_explode["ingredients"].apply(remove_parentheses)
-        ingredient_df_explode.info()
+        # ingredient_df_explode["Ingredient_Name"] = ingredient_df_explode["ingredients"].apply(remove_parentheses)
+        # ingredient_df_explode.info()
 
-        # Separate the quantity to get the number part and the unit part dependently
-        ingredient_df_explode["t_unit"] = ingredient_df_explode["quantity"].apply(unit)
+        ### Separate the quantity to get the number part and the unit part dependently
+        # Get unit
+        logger.info("Retrieving unit only from quantity ...")
+        ingredient_df_explode["unit_name"] = ingredient_df_explode["quantity"].apply(unit)
+        logger.info("Retrieved unit only from quantity")
 
-        with open(file="test.csv", mode="w", encoding="utf-8-sig", newline="") as csv_file:
-            csv_file.write(ingredient_df_explode.to_csv(index=False))
-    #     # Convert DataFrame into Dict
-    #     logger.info("Converting dataframe to list of dictionaries...")
-    #     result_list = duplicates_removal_df.to_dict(orient="records")
-    #
-    #     # Load
-    #     try:
-    #         lines = len(result_list)
-    #         collection.insert_many(result_list)
-    #         result_list.clear()
-    #         logger.info(f"Inserted {lines} records")
-    #         logger.info(f"Execution completed")
-    #     except Exception as e:
-    #         logger.error(f"Failed to upload converted file to {collection}: {e}")
-    #
+        ingredient_df_explode["unit_name"] = ingredient_df_explode["unit_name"].apply(unit_convertion)
+
+        # Get num
+        ingredient_df_explode["unit_number"] = ingredient_df_explode["quantity"].apply(num)
+
+
+        criteria = ["適量", "少許", "依喜好"]
+        ingredient_df_explode.loc[ingredient_df_explode["unit_name"].isin(criteria), "unit_number"] = float(1)
+
+        ### Starting LLM out of Gemini 2.5 flash
+
+        # 1.Filter rows (Auto-fill metric units first, return rest for LLM)
+        df = ingredient_df_explode.reset_index(drop=True)
+        df_to_process = get_rows_needing_processing(df)
+
+        df_final = pd.DataFrame()
+        if not df_to_process.empty:
+            # 2. Generate English Prompt with Carbon Footprint context
+            prompt = construct_hybrid_language_prompt(df_to_process)
+
+            # 3. Call API
+            predictions = fetch_gemini_response(prompt)
+
+            if predictions:
+                # 4. Update Data
+                df_final, count = update_dataset(df, predictions)
+
+                logger.info(f"\n[Result] Successfully updated {count} rows via LLM.")
+
+        else:
+            logger.info("[Result] No rows required LLM inference. All data is clean or auto-filled.")
+            df_final = ingredient_df_explode
+        ### Processing LLM out of Gemini 2.5 flash
+
+        df_final["unit_number"] = df_final["unit_number"].apply(lambda x: float(x)) 
+
+        # Save the final result into CSV file
+        df_final.to_csv(SAVED_FILE_PATH, index=False)
+
+        # Convert DataFrame into Dict
+        # logger.info("Converting dataframe to list of dictionaries...")
+        # result_list = df_final.to_dict(orient="records")
+
+        # Load to MongoDB(MySQL)
+        # try:
+        #     lines = len(result_list)
+        #     collection.insert_many(result_list)
+        #     result_list.clear()
+        #     logger.info(f"Inserted {lines} records")
+        #     logger.info(f"Execution completed")
+
+
+        # except Exception as e:
+            # logger.error(f"Failed to upload converted file to {collection}: {e}")
+
     except Exception as e:
         logger.error(f"{e}")
 
     finally:
-        conn.close()
-        logger.info(f"Disconnect to MongoDB")
+        # conn.close()
+        # logger.info(f"Disconnect to MongoDB")
         logger.info(f"Finished execution of {FILENAME}")
 
 
 if __name__ == "__main__":
-    # main()
-    # data = {
-    #     "type": ["parentheses", "parentheses", "parentheses"],
-    #     "food": ["香料鹽（牛肉用和魚用的不同）", "高麗菜(甘藍)", "福山萵苣(大陸妹)"]
-    # }
-    # df = pd.DataFrame(data)
-    data = ["香料鹽（牛肉用和魚用的不同）"]
-    ans = ""
-    for _ in data:
-        _ = _.strip().replace(" ", "")
-        print(_)
-        t_s = remove_parentheses(_)
-        ans += t_s + "\n"
-    print(ans)
+    main()

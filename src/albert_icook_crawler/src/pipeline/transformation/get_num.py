@@ -1,8 +1,8 @@
-from src.pipeline.utils import num_regex_pattern as rep
+from albert_icook_crawler.src.pipeline.utils import num_regex_pattern as rep
 
 from decimal import Decimal, ROUND_HALF_UP
 
-from src.pipeline.utils.num_regex_pattern import FRACTION_SYMBOL_NUM_MAPS
+from albert_icook_crawler.src.pipeline.utils.num_regex_pattern import FRACTION_SYMBOL_NUM_MAPS
 
 """
 README:
@@ -60,9 +60,7 @@ def get_num_field_quantity(text: str) -> float | str | None:
                     return match_num_with_digit(matches)
 
             elif any(sep in text for sep in ("½", "⅓", "⅔", "¼", "¾", "⅕")):
-                extract_and_convert(text) # bool
-                if matches is not None:
-                    return match_num_with_digit(matches)
+                return extract_and_convert(text)
 
             else: # not a fraction
                 matches = rep.CMP_PATTERN_WITH_DIGITAL_WITHOUT_RANGE.finditer(text)
@@ -133,15 +131,6 @@ def match_num_with_digit(matches) -> float | Decimal | str | None:
                     return number_part
                 except ValueError:
                     return None
-    return None
-
-def match_unit(matches) ->  str | None:
-    """
-    extract num part of digits
-    param matches: Iterator[Match[str]]
-    """
-    for m in matches: # activate this iterate generator
-        return m.group(2)
     return None
 
 
@@ -268,14 +257,14 @@ def match_num_with_chinese_range(matches) -> float | Decimal | str | None:
             print(e)
     return None
 
-if __name__ == '__main__':
-    text = "1½匙"
-    matches = rep.CMP_PATTERN_WITH_FRACTION_SYMBOL_WITHOUT_RANGE.finditer(text)
-    for m in matches:
-        num = m.group(1)
-        unit = m.group(2)
-
-        for _ in num:
-            if _ in FRACTION_SYMBOL_NUM_MAPS:
-                num = FRACTION_SYMBOL_NUM_MAPS[_]
-                x
+# if __name__ == '__main__':
+#     text = "1½匙"
+#     matches = rep.CMP_PATTERN_WITH_FRACTION_SYMBOL_WITHOUT_RANGE.finditer(text)
+#     for m in matches:
+#         num = m.group(1)
+#         unit = m.group(2)
+#
+#         for _ in num:
+#             if _ in FRACTION_SYMBOL_NUM_MAPS:
+#                 num = FRACTION_SYMBOL_NUM_MAPS[_]
+#                 x
