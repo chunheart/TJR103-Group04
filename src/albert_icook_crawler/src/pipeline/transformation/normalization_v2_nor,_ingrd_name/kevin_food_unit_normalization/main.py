@@ -4,17 +4,23 @@ import time
 import os
 import re
 
+from datetime import datetime
 from pathlib import Path
 from typing import List, Dict, Optional, Union
 from google import genai
 from google.genai import types
+from dotenv import load_dotenv
 
 # ================= CONFIGURATION =================
-API_KEY = os.getenv("GEMINI_API_KEY", "請填入API KEY") 
+ROOT_DIR = Path(__file__).resolve().parents[4] # Root: /opt/airflow/src/albert_icook_crawler
+ENV_PATH = Path(ROOT_DIR/ "src" / "utils"/ ".env")
+load_dotenv(ENV_PATH)
+
+API_KEY = os.getenv("API_KEY", "請使用你的API KEY") 
 MODEL_NAME = "gemini-2.5-flash"
 
 # 檔案路徑
-ROOT_DIR = Path(__file__).resolve().parents[5] # Root dir : project_footprint_calculation
+ROOT_DIR = Path(__file__).resolve().parents[5] # Root dir : /opt/airflow/src/albert_icook_crawler
 MAPPING_DB_FILE = ROOT_DIR / "data" / "db_unit_normalization" / "unit_normalization_db.csv"
 
 # ================= 轉換規則庫 =================
@@ -43,7 +49,7 @@ VOLUME_TO_ML: Dict[str, float] = {
     "大匙": 15, "tbsp": 15, "T": 15, "匙": 15,
     "小匙": 5, "tsp": 5, "t": 5, "茶匙": 5,
     "杯": 240, "cup": 240, "C": 240, "米杯": 180,
-    "ml": 1, "cc": 1, "㏄": 1, "公升": 1000, "L": 1000,
+    "ml": 1, "毫升": 1, "cc": 1, "㏄": 1, "公升": 1000, "L": 1000,
     "又1/2杯": 360, "又1/2大匙": 22.5
 }
 
@@ -216,16 +222,15 @@ class IngredientNormalizer:
         print(f" 全部完成！結果已儲存至：{output_csv_path}")
 
 def main():
-    project_root = Path(__file__).parents[2]
-    input_csv = project_root / "data/db_ingredients/icook_recipe_2025-11-19_mydatabase_recipe_ingredients.csv"
-    output_csv = project_root / "data/db_ingredients/icook_recipe_2025-11-19_mydatabase_recipe_ingredients_unitN.csv"
+    input_csv = ROOT_DIR / f"data/db_ingredients/icook_recipe_{datetime.today().date()}_recipe_ingredients.csv"
+    output_csv = ROOT_DIR / f"data/db_ingredients/icook_recipe_{datetime.today().date()}_recipe_ingredients_unitN.csv"
 
     if input_csv.exists():
         normalizer = IngredientNormalizer()
         normalizer.process_csv(input_csv, output_csv)
+
     else:
         print(f"{input_csv} not found.")
 
 if __name__ == "__main__":
-    # main()
-    print(ROOT_DIR)
+    main()

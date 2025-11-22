@@ -1,4 +1,4 @@
-from src.pipeline.transformation import get_num as sen
+from albert_icook_crawler.src.pipeline.transformation import get_num as sen
 import pandas as pd
 
 

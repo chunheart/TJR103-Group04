@@ -1,6 +1,6 @@
-import src.pipeline.utils.num_regex_pattern as rep
-from src.pipeline.transformation.get_num import have_chinese_char_num
-from src.pipeline.utils.num_regex_pattern import FRACTION_SYMBOL_NUM_MAPS
+import albert_icook_crawler.src.pipeline.utils.num_regex_pattern as rep
+from albert_icook_crawler.src.pipeline.transformation.get_num import have_chinese_char_num
+from albert_icook_crawler.src.pipeline.utils.num_regex_pattern import FRACTION_SYMBOL_NUM_MAPS
 
 
 fraction_pattern = '|'.join(rep.re.escape(k) for k in FRACTION_SYMBOL_NUM_MAPS.keys())

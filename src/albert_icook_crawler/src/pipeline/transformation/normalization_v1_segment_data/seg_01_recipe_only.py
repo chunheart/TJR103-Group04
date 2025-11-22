@@ -1,9 +1,9 @@
 import pandas as pd
 import os, sys
 
-import src.utils.mongodb_connection as mondb
-from src.pipeline.transformation import get_ppl_num as ppl
-from src.utils.get_logger import get_logger
+# import albert_icook_crawler.src.utils.mongodb_connection as mondb
+from albert_icook_crawler.src.pipeline.transformation import get_ppl_num as ppl
+from albert_icook_crawler.src.utils.get_logger import get_logger
 
 from pathlib import Path
 from datetime import datetime
@@ -17,14 +17,14 @@ LOG_FILE_PATH = LOG_FILE_DIR /  f"{FILENAME}_{datetime.today().date()}.log"
 DATABASE = "mydatabase"
 COLLECTION = "recipes"
 
-DATA_ROOT_DIR = Path(__file__).resolve().parents[4] # Root dir : project_footprint_calculation
+DATA_ROOT_DIR = Path(__file__).resolve().parents[4] # Root dir : /opt/airflow/src/albert_icook_crawler
 CSV_FILE_DIR = DATA_ROOT_DIR / "data" / "daily"
 CSV_FILE_DIR.mkdir(parents=True, exist_ok=True)
 CSV_FILE_PATH = CSV_FILE_DIR / f"Created_on_{datetime.today().date()}" / f"icook_recipe_{datetime.today().date()}.csv"
 
 SAVED_FILE_DIR = DATA_ROOT_DIR / "data" / "db_recipe"
 SAVED_FILE_DIR.mkdir(parents=True, exist_ok=True)
-SAVED_FILE_PATH = SAVED_FILE_DIR / f"icook_recipe_{datetime.today().date()}_{DATABASE}_{COLLECTION}.csv"
+SAVED_FILE_PATH = SAVED_FILE_DIR / f"icook_recipe_{datetime.today().date()}_{COLLECTION}.csv"
 
 logger = get_logger(log_file_path=LOG_FILE_PATH, logger_name=FILENAME)
 
@@ -57,28 +57,28 @@ def main():
     """
     logger.info(f"Starting execution of {FILENAME}")
 
-    logger.info("Connecting to MongoDB...")
-    try:
-        conn = mondb.connect_to_local_mongodb()
-    except Exception as e:
-        logger.error(f"Failed to establish MongoDB connection: {e}")
+    # logger.info("Connecting to MongoDB...")
+    # try:
+    #     conn = mondb.connect_to_local_mongodb()
+    # except Exception as e:
+    #     logger.error(f"Failed to establish MongoDB connection: {e}")
 
-        logger.critical(f"Aborting execution of {FILENAME} due to fatal error")
-        sys.exit(1)
+    #     logger.critical(f"Aborting execution of {FILENAME} due to fatal error")
+    #     sys.exit(1)
 
-    logger.info(f"Connected to MongoDB")
+    # logger.info(f"Connected to MongoDB")
 
-    logger.info("Connecting to Database, mydatabase...")
-    try:
-        db = conn[DATABASE]
-    except Exception as e:
-        logger.error(f"Failed to connect to Database: {e}")
-        conn.close()
-        logger.critical(f"Closed connection to MongoDB")
-        logger.critical(f"Aborting execution of {FILENAME} due to fatal error")
-        sys.exit(1)
+    # logger.info("Connecting to Database, mydatabase...")
+    # try:
+    #     db = conn[DATABASE]
+    # except Exception as e:
+    #     logger.error(f"Failed to connect to Database: {e}")
+    #     conn.close()
+    #     logger.critical(f"Closed connection to MongoDB")
+    #     logger.critical(f"Aborting execution of {FILENAME} due to fatal error")
+    #     sys.exit(1)
 
-    collection = db[COLLECTION]
+    # collection = db[COLLECTION]
     try:
         with open(file=CSV_FILE_PATH, mode="r", encoding="utf-8-sig") as csv:
             raw_df = pd.read_csv(csv)
@@ -129,26 +129,26 @@ def main():
         duplicates_removal_df.to_csv(SAVED_FILE_PATH, index=False)
         logger.info(f"Saved data to the path: {SAVED_FILE_PATH}")
 
-        # Convert DataFrame into Dict
-        logger.info("Converting dataframe to list of dictionaries...")
-        result_list = duplicates_removal_df.to_dict(orient="records")
+        # # Convert DataFrame into Dict
+        # logger.info("Converting dataframe to list of dictionaries...")
+        # result_list = duplicates_removal_df.to_dict(orient="records")
 
-        # Load to MongoDB(MySQL)
-        try:
-            lines = len(result_list)
-            collection.insert_many(result_list)
-            result_list.clear()
-            logger.info(f"Inserted {lines} records")
-            logger.info(f"Execution completed")
-        except Exception as e:
-            logger.error(f"Failed to upload converted file to {collection}: {e}")
+        # # Load to MongoDB(MySQL)
+        # try:
+        #     lines = len(result_list)
+        #     collection.insert_many(result_list)
+        #     result_list.clear()
+        #     logger.info(f"Inserted {lines} records")
+        #     logger.info(f"Execution completed")
+        # except Exception as e:
+        #     logger.error(f"Failed to upload converted file to {collection}: {e}")
 
     except Exception as e:
         logger.error(f"Failed to open CSV file: {e}")
 
     finally:
-        conn.close()
-        logger.info(f"Disconnect to MongoDB")
+        # conn.close()
+        # logger.info(f"Disconnect to MongoDB")
         logger.info(f"Finished execution of {FILENAME}")
 
 

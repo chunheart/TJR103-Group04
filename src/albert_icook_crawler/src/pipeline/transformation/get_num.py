@@ -1,8 +1,8 @@
-from src.pipeline.utils import num_regex_pattern as rep
+from albert_icook_crawler.src.pipeline.utils import num_regex_pattern as rep
 
 from decimal import Decimal, ROUND_HALF_UP
 
-from src.pipeline.utils.num_regex_pattern import FRACTION_SYMBOL_NUM_MAPS
+from albert_icook_crawler.src.pipeline.utils.num_regex_pattern import FRACTION_SYMBOL_NUM_MAPS
 
 """
 README:

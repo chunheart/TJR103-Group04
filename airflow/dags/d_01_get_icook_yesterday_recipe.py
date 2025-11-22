@@ -1,7 +1,7 @@
 import os, sys
 import pendulum
 
-from albert_icook_crawler.src.pipeline.extract.scrapy_app_icook import IcookDailySpider
+from src.pipeline.extract.scrapy_app_icook import IcookDailySpider
 from airflow import DAG
 from airflow.operators.python import PythonOperator
 from datetime import datetime, timedelta
@@ -32,8 +32,8 @@ dag = DAG(
     'd_01_get_icook_yesterday_recipe',  #
     default_args=default_args,
     description='Python operators',  #
-    schedule="* 9 * * *",  #
-    start_date=pendulum.datetime(2025, 1, 1, tz=LOCAL_TZ),
+    schedule="* 21 * * *",  #
+    start_date=pendulum.datetime(2025, 11, 18, tz="UTC"),
     catchup=False,
     tags=["scrapy", "icook"]
 )
