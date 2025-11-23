@@ -89,7 +89,7 @@ poetry run python3 src/kevin_food_unit_normalization/main.py
 ## 六、VM start-up script
 ```shell
 #!/bin/bash
-set -euo pipefail
+#set -euo pipefail
 
 # ---------- System basics ----------
 apt-get update -y
@@ -112,6 +112,7 @@ EOF
 apt-get update -y
 apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 systemctl enable --now docker
+echo "[DONE] install system and docker tools"
 
 # ---------- App user ----------
 # so that tjr103-gcp-user can use docker
@@ -120,16 +121,17 @@ systemctl enable --now docker
 id -u tjr103-gcp-user &>/dev/null || useradd -m tjr103-gcp-user
 usermod -aG docker tjr103-gcp-user
 cd /home/tjr103-gcp-user
+echo "[DONE] create users"
 
 # ---------- Project checkout ----------
 # TBA: not 777 the whole folder (changer owner as <me> and grant min permission)
 git clone https://github.com/chunheart/TJR103-Group04.git
 git config --global --add safe.directory /home/tjr103-gcp-user/TJR103-Group04
-
-cd /home/tjr103-gcp-user/TJR103-Group04
+cd TJR103-Group04
 git config core.filemode false
 mkdir -p airflow/logs airflow/data airflow/utils airflow/tasks
 chmod -R 777 .
+echo "[DONE] clone project"
 
 # ---------- Secrets from Secret Manager
 # TBA: mount secret file instead ENV
@@ -139,9 +141,11 @@ SECRET_JSON="$(gcloud secrets versions access latest \
 export MY_GOOGLE_TRANS_API_KEY="$(echo "${SECRET_JSON}" | jq -r '.google_translate_api_key')"
 export MY_GEMINI_API_KEY="$(echo "${SECRET_JSON}"       | jq -r '.gemini_api_key')"
 export MYSQL_PASSWORD="$(echo "${SECRET_JSON}"       | jq -r '.mysql_password')"
+echo "[DONE] get secrets"
 
 # ---------- Bring up containers ----------
 docker compose -f src/gina_icook_crawler/kafka/docker-compose.yml up -d
 docker compose -f service/mysql_etl/docker-compose.yaml up -d
 docker network connect kafka_kafka-net py_airflow
+echo "[DONE] start containers"
 ``` 
