@@ -1,5 +1,5 @@
 import os
-import pymongo as mon
+import pymysql as sql
 
 from dotenv import load_dotenv
 from pymongo.server_api import ServerApi
@@ -10,50 +10,78 @@ ENV_FILE_PATH = PROJECT_ROOT / "src" / "utils" / ".env"
 load_dotenv(ENV_FILE_PATH)
 
 
-"""connect to local MongoDB Server"""
-USERNAME=os.getenv("MONGO_LOCAL_USERNAME")
-PASSWORD=os.getenv("MONGO_LOCAL_PASSWORD")
-HOST=os.getenv("MONGO_LOCAL_HOST")
-PORT=os.getenv("MONGO_LOCAL_PORT")
-AUTH_DB=os.getenv("MONGO_LOCAL_AUTH_DB")
+"""connect to local MySQL Server"""
+HOST = os.getenv("MYSQL_LOCAL_HOST")
+USER = os.getenv("MYSQL_LOCAL_USER")
+PASSWORD = os.getenv("MYSQL_LOCAL_PASSWORD")
+PORT = int(os.getenv("MYSQL_LOCAL_PORT"))
+CHARSET = os.getenv("MYSQL_LOCAL_CHARSET")
+CURSOR_CLASS = os.getenv("MYSQL_LOCAL_CURSORCLASS")
+WRITE_TIMEOUT = int(120)
+READ_TIMEOUT = int(120)
 
-ONLINE_USERNAME=os.getenv("MONGO_ONLINE_USERNAME")
-ONLINE_PASSWORD=os.getenv("MONGO_ONLINE_PASSWORD")
 
-def connect_to_online_mongodb():
-    """connect to MongoDB Server"""
-    connection_uri = f"mongodb+srv://{ONLINE_USERNAME}:{ONLINE_PASSWORD}@cluster0.fyyzcmn.mongodb.net/?appName=Cluster0"
-    server_api = ServerApi("1")
+def mysql_connection():
+    """connect to MySQL Server"""
+
     try:
-        connection = mon.MongoClient(connection_uri, server_api=server_api) # connecting
-        print(connection.server_info())
-        print("connect successfully to MongoDB")
+        connection = sql.connect(
+            host=HOST,
+            user=USER,
+            password=PASSWORD,
+            port=PORT,
+            charset=CHARSET,
+            cursorclass=CURSOR_CLASS,
+            read_timeout=READ_TIMEOUT,
+            write_timeout=WRITE_TIMEOUT,
+        )
+        print("connect successfully to MySQL server")
         return connection
 
     except Exception as e:
-        print(f"Authentication failed: {e}")
-        return None
+        raise(f"Authentication failed: {e}")
 
-def connect_to_local_mongodb():
-    """connect to MongoDB Server"""
-    connection_string = f"mongodb://{USERNAME}:{PASSWORD}@{HOST}:{PORT}/?authSource={AUTH_DB}"
+
+def create_db(conn, db_name):
+    """
+    Create db if not exists
+
+    Param conn: MySQL connection instance
+    Param db_name: str, expected table name
+    Return: None
+    """
     try:
-        connection = mon.MongoClient(connection_string) # connecting
-        print(connection.server_info())
-        print("connect successfully to MongoDB")
-        return connection
+        with conn.cursor() as cursor:
+            create_db_sql = f"CREATE DATABASE IF NOT EXISTS {db_name} DEFAULT CHARACTER SET utf8mb4"
+            cursor.execute(create_db_sql)
+            print(f"{db_name} has been created")
+        
+        conn.select_db(db_name)
+        print(f"Switched current connection to: {db_name}")
 
-    except Exception as e:
-        print(f"Authentication failed: {e}")
-        return None
+    except sql.MySQLError as e:
+        raise e
+    
+def create_table(conn, table_name, shema):
+    pass
 
-def close_connection(db_connection):
-    """ disconnect to MongoDB Server"""
-    print("All data has been uploaded and MongoDB is disconnected")
-    db_connection.close()
 
 
 if __name__ == "__main__":
     # client = connect_to_online_mongodb()
     # close_connection(client)
-    pass
+
+    try:
+        conn = mysql_connection()
+        if conn:
+            print("Connection suceeded")
+    
+            try:
+                conn.close()
+                print("MySQL is disconnected")
+            except sql.MySQLError as e:
+                print(f"{e}")    
+    
+    except sql.MySQLError as e:
+        print(f"Connection failed, {e}")
+    

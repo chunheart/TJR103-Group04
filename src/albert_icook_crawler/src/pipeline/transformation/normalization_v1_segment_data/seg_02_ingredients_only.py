@@ -11,6 +11,7 @@ from albert_icook_crawler.src.pipeline.transformation.get_unit import get_unit_f
 from pathlib import Path
 from datetime import datetime
 from dotenv import load_dotenv
+from zoneinfo import ZoneInfo
 
 ROOT_DIR = Path(__file__).resolve().parents[4] # Root: /opt/airflow/src/albert_icook_crawler
 ENV_PATH = Path(ROOT_DIR/ "src" / "utils"/ ".env")
@@ -29,6 +30,8 @@ DATA_ROOT_DIR = Path(__file__).resolve().parents[4]
 SAVED_FILE_DIR = DATA_ROOT_DIR / "data" / "db_ingredients"
 SAVED_FILE_DIR.mkdir(parents=True, exist_ok=True)
 SAVED_FILE_PATH =  SAVED_FILE_DIR / f"icook_recipe_{datetime.today().date()}_{COLLECTION}.csv"
+
+TZ = ZoneInfo("Asia/Taipei")
 
 # Gemini Configuration
 API_KEY = os.getenv("API_KEY")
@@ -262,7 +265,7 @@ def update_dataset(df: pd.DataFrame, predictions: Dict) -> Tuple[pd.DataFrame, i
     return df_updated, success_count
 
 
-def main():
+def get_ingredients_info():
     """
     Retrieve icook recipe CSV file from the determined field to MongoDB, collection is recipe_ingredients
     The field is listed below:
@@ -336,7 +339,7 @@ def main():
             "quantity",
         ]
         ingredient_df = raw_df[mask]
-        int_time, upd_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S"), datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        int_time, upd_time = datetime.now(tz=TZ).strftime("%Y-%m-%d %H:%M:%S"), datetime.now(tz=TZ).strftime("%Y-%m-%d %H:%M:%S")
         ingredient_df["ins_timestamp"] = int_time
         ingredient_df["upd_timestamp"] = upd_time
 
@@ -349,9 +352,6 @@ def main():
         logger.info("Unwinding ...")
         ingredient_df_explode = unwind(ingredient_df, "ingredients")
         logger.info("Unwinding completed")
-        # Remove parentheses of values of field ingredients
-        # ingredient_df_explode["Ingredient_Name"] = ingredient_df_explode["ingredients"].apply(remove_parentheses)
-        # ingredient_df_explode.info()
 
         ### Separate the quantity to get the number part and the unit part dependently
         # Get unit
@@ -424,4 +424,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    get_ingredients_info()

@@ -10,6 +10,7 @@ from typing import List, Dict, Optional, Union
 from google import genai
 from google.genai import types
 from dotenv import load_dotenv
+from zoneinfo import ZoneInfo 
 
 # ================= CONFIGURATION =================
 ROOT_DIR = Path(__file__).resolve().parents[4] # Root: /opt/airflow/src/albert_icook_crawler
@@ -18,6 +19,8 @@ load_dotenv(ENV_PATH)
 
 API_KEY = os.getenv("API_KEY", "請使用你的API KEY") 
 MODEL_NAME = "gemini-2.5-flash"
+
+TZ=ZoneInfo("Asia/Taipei")
 
 # 檔案路徑
 ROOT_DIR = Path(__file__).resolve().parents[5] # Root dir : /opt/airflow/src/albert_icook_crawler
@@ -221,7 +224,7 @@ class IngredientNormalizer:
         df.to_csv(output_csv_path, index=False, encoding='utf-8-sig')
         print(f" 全部完成！結果已儲存至：{output_csv_path}")
 
-def main():
+def normalize_unit():
     input_csv = ROOT_DIR / f"data/db_ingredients/icook_recipe_{datetime.today().date()}_recipe_ingredients.csv"
     output_csv = ROOT_DIR / f"data/db_ingredients/icook_recipe_{datetime.today().date()}_recipe_ingredients_unitN.csv"
 
@@ -233,4 +236,4 @@ def main():
         print(f"{input_csv} not found.")
 
 if __name__ == "__main__":
-    main()
+    normalize_unit()

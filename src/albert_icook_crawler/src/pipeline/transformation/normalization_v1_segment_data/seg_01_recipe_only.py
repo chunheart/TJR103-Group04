@@ -1,12 +1,12 @@
 import pandas as pd
 import os, sys
 
-# import albert_icook_crawler.src.utils.mongodb_connection as mondb
 from albert_icook_crawler.src.pipeline.transformation import get_ppl_num as ppl
 from albert_icook_crawler.src.utils.get_logger import get_logger
 
 from pathlib import Path
 from datetime import datetime
+from zoneinfo import ZoneInfo
 
 FILENAME = os.path.basename(__file__).split(".")[0]
 LOG_ROOT_DIR = Path(__file__).resolve().parents[3] # Root dir : src
@@ -26,9 +26,11 @@ SAVED_FILE_DIR = DATA_ROOT_DIR / "data" / "db_recipe"
 SAVED_FILE_DIR.mkdir(parents=True, exist_ok=True)
 SAVED_FILE_PATH = SAVED_FILE_DIR / f"icook_recipe_{datetime.today().date()}_{COLLECTION}.csv"
 
+TZ = ZoneInfo("Asia/Taipei")
+
 logger = get_logger(log_file_path=LOG_FILE_PATH, logger_name=FILENAME)
 
-def main():
+def get_recipe_info():
     """
     Retrieve icook recipe CSV file from the determined field to MongoDB, collection is recipes
     The field is listed below:
@@ -105,7 +107,7 @@ def main():
             "crawl_datetime",
         ]
         recipe_df = raw_df[mask]
-        int_time, upd_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S"), datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        int_time, upd_time = datetime.now(tz=TZ).strftime("%Y-%m-%d %H:%M:%S"), datetime.now(tz=TZ).strftime("%Y-%m-%d %H:%M:%S")
         recipe_df["ins_timestamp"] = int_time
         recipe_df["upd_timestamp"] = upd_time
 
@@ -153,4 +155,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    get_recipe_info()
