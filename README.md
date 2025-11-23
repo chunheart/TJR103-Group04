@@ -38,6 +38,7 @@ docker build -f service/mysql_etl/airflow.Dockerfile -t py_airflow:latest .
 # set KEYs (for testing purpose)
 export MY_GOOGLE_TRANS_API_KEY={your key}
 export MY_GEMINI_API_KEY={your key}
+export MYSQL_PASSWORD={psd}
 
 # start kafka
 docker compose -f src/gina_icook_crawler/kafka/docker-compose.yml up -d
@@ -84,3 +85,63 @@ poetry run python3 src/kevin_food_unit_normalization/main.py
 # 輸出結果 (包含 Normalized_Weight_g 欄位)
 # 檔案位於: src/kevin_ytower_crawler/ytower_csv_output/ytower_recipes_normalized.csv
 ```
+
+## 六、VM start-up script
+```shell
+#!/bin/bash
+set -euo pipefail
+
+# ---------- System basics ----------
+apt-get update -y
+apt-get install -y ca-certificates curl gnupg git jq
+
+# ---------- Docker (official repo) ----------
+UBUNTU_CODENAME="$(. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}")"
+
+install -m 0755 -d /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+chmod a+r /etc/apt/keyrings/docker.asc
+cat >/etc/apt/sources.list.d/docker.sources <<EOF
+Types: deb
+URIs: https://download.docker.com/linux/ubuntu
+Suites: ${UBUNTU_CODENAME}
+Components: stable
+Signed-By: /etc/apt/keyrings/docker.asc
+EOF
+
+apt-get update -y
+apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+systemctl enable --now docker
+
+# ---------- App user ----------
+# so that tjr103-gcp-user can use docker
+# TBA: useradd 會在 user 已存在時失敗，可以改成先檢查：
+#   id -u tjr103-gcp-user &>/dev/null || useradd -m tjr103-gcp-user
+id -u tjr103-gcp-user &>/dev/null || useradd -m tjr103-gcp-user
+usermod -aG docker tjr103-gcp-user
+cd /home/tjr103-gcp-user
+
+# ---------- Project checkout ----------
+# TBA: not 777 the whole folder (changer owner as <me> and grant min permission)
+git clone https://github.com/chunheart/TJR103-Group04.git
+git config --global --add safe.directory /home/tjr103-gcp-user/TJR103-Group04
+
+cd /home/tjr103-gcp-user/TJR103-Group04
+git config core.filemode false
+mkdir -p airflow/logs airflow/data airflow/utils airflow/tasks
+chmod -R 777 .
+
+# ---------- Secrets from Secret Manager
+# TBA: mount secret file instead ENV
+SECRET_JSON="$(gcloud secrets versions access latest \
+  --secret=coemission \
+  --project="velvety-broker-476816-s9")"
+export MY_GOOGLE_TRANS_API_KEY="$(echo "${SECRET_JSON}" | jq -r '.google_translate_api_key')"
+export MY_GEMINI_API_KEY="$(echo "${SECRET_JSON}"       | jq -r '.gemini_api_key')"
+export MYSQL_PASSWORD="$(echo "${SECRET_JSON}"       | jq -r '.mysql_password')"
+
+# ---------- Bring up containers ----------
+docker compose -f src/gina_icook_crawler/kafka/docker-compose.yml up -d
+docker compose -f service/mysql_etl/docker-compose.yaml up -d
+docker network connect kafka_kafka-net py_airflow
+``` 
