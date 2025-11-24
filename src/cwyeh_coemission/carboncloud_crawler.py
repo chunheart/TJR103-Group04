@@ -19,15 +19,6 @@ def parse_hits_product(search_api_res_data:list) -> list :
     Parse and extract data from respons of search API
     """
     parsed_data = []
-    # for res_prod in search_api_res_data['hits']:
-    #     rec = {}
-    #     rec['prod_id'] = res_prod['contents'][0]
-    #     rec['prod_name'] = res_prod['contents'][1]['productName']
-    #     rec['total_coe'] = res_prod['contents'][1]['totalFootprint']
-    #     rec['market'] = res_prod['contents'][1]['market']
-    #     rec['org'] = res_prod['contents'][1]['orgInfo']['displayName']
-    #     rec['breakdown_coe'] = json.dumps(res_prod['contents'][1]['footprintBreakdown'])
-    #     parsed_data.append(rec)
     for res_prod in search_api_res_data.get("hits", []):
         c0 = res_prod.get("contents", [{}])[0]
         c1 = res_prod.get("contents", [{}, {}])[1]
@@ -83,13 +74,17 @@ def carboncloud_crawler(query_list:list,max_pages_per_item=2) -> None | pd.DataF
         }
 
         ### initial request
-        res = requests.get(search_api_url, headers=headers, timeout=20)
-        #res.raise_for_status()
-        res_data = res.json()
-        res_total_hits_count = res_data['totalHitCount']
-        total_pages = math.ceil(res_total_hits_count/20)
-        total_pages = min(total_pages,max_pages_per_item)
-        print(f'Find {res_total_hits_count} products. {total_pages} pages to be collected (limited by max {max_pages_per_item} pages)')
+        try:
+            res = requests.get(search_api_url, headers=headers, timeout=20)
+            #res.raise_for_status()
+            res_data = res.json()
+            res_total_hits_count = res_data['totalHitCount']
+            total_pages = math.ceil(res_total_hits_count/20)
+            total_pages = min(total_pages,max_pages_per_item)
+            print(f'Find {res_total_hits_count} products. {total_pages} pages to be collected (limited by max {max_pages_per_item} pages)')
+        except:
+            print(f'[Warning] Fail to crawl and fetch {query_item}')
+            continue
         if res_total_hits_count < 1:
             continue
 
@@ -108,7 +103,7 @@ def carboncloud_crawler(query_list:list,max_pages_per_item=2) -> None | pd.DataF
                     res_data = res.json()
                     collected_prod += parse_hits_product(res_data)
                     print('GET search API done:',search_api_url)
-            
+
             ### to df & basic clean data
             query_df = pd.DataFrame(collected_prod)
             query_df['query'] = query_item  #lowered
