@@ -2,7 +2,8 @@ FROM apache/airflow:2.11.0-python3.12
 
 ### SETTING
 # ENV AIRFLOW__WEBSERVER__SHOW_TRIGGER_FORM_IF_NO_PARAMS=true
-
+ARG AIRFLOW_PASSWORD
+#RUN echo "$AIRFLOW_PASSWORD"
 
 ### init airflow & create user
 # RUN airflow standalone
@@ -10,7 +11,7 @@ RUN airflow db init
 RUN airflow users create \
     --username airflow \
     --firstname airflow \
-    --password airflow \
+    --password $AIRFLOW_PASSWORD \
     --lastname airflow \
     --role Admin \
     --email your_email@example.com
