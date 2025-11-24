@@ -104,7 +104,7 @@ def etl_mysql_warehouse():
         """
         if res:
             with myetl.get_mysql_connection(
-                host='mysql',port=3306,user='root',password='pas4word',db='EXAMPLE',
+                host='mysql',port=3306,user='root',db='EXAMPLE',
             ) as my_conn:
                 myetl.update_unit_w_u2g(my_conn)
                 myetl.update_ingredient_w_normalize(my_conn)
