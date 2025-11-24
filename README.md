@@ -146,6 +146,7 @@ SECRET_JSON="$(gcloud secrets versions access latest \
 export MY_GOOGLE_TRANS_API_KEY="$(echo "${SECRET_JSON}" | jq -r '.google_translate_api_key')"
 export MY_GEMINI_API_KEY="$(echo "${SECRET_JSON}"       | jq -r '.gemini_api_key')"
 export MYSQL_PASSWORD="$(echo "${SECRET_JSON}"       | jq -r '.mysql_password')"
+export AIRFLOW_PASSWORD="$(echo "${SECRET_JSON}"       | jq -r '.airflow_password')"
 echo "[DONE] get secrets"
 
 # ---------- Bring up containers ----------
