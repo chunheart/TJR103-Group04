@@ -44,7 +44,7 @@ def ingest_data_dag():
         default_params = ctx["params"]
         db_name = config.get('db_name',default_params['db_name'])
         with myetl.get_mysql_connection(
-                host='mysql',port=3306,user='root',password='pas4word',
+                host='mysql',port=3306,user='root',
             ) as my_conn:
 
             # when init, no need to assign db for conn
