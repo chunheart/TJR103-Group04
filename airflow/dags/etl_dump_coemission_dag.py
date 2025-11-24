@@ -26,6 +26,7 @@ default_args = {
     "email_on_retry": False,
     "retries": 1,
     "retry_delay": dt.timedelta(minutes=1),
+    "dagrun_timeout":dt.timedelta(hours=1),
 }
 
 

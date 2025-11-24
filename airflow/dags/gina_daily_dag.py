@@ -15,6 +15,7 @@ BASE_DIR = "/opt/airflow/logs/icook/data"  # daily.py 寫入的資料夾
 default_args = {
     "owner": "airflow",
     "retries": 0,  # 有「檔案檢查」就不需要 retry
+    "dagrun_timeout":timedelta(hours=1),
 }
 
 # ---------------------------------------------------------
