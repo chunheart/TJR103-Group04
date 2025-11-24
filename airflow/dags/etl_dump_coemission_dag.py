@@ -58,7 +58,7 @@ def etl_dump_coemission():
         dump data into coemission
         """
         with myetl.get_mysql_connection(
-                host='mysql',port=3306,user='root',password='pas4word',db='EXAMPLE',
+                host='mysql',port=3306,user='root',db='EXAMPLE',
             ) as my_conn:
             myetl.register_coemission(my_conn, res)
             print('[DONE] dump myemission data into carbon emission')

@@ -85,7 +85,7 @@ def etl_mysql_warehouse():
         print("Running Task 3")
         if res:
             with myetl.get_mysql_connection(
-                host='mysql',port=3306,user='root',password='pas4word',db='EXAMPLE',
+                host='mysql',port=3306,user='root',db='EXAMPLE',
             ) as my_conn:
                 myetl.register_recipe(my_conn, res)
                 print('[DONE] insert into recipe')
