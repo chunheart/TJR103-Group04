@@ -27,7 +27,7 @@ Utils for mysql ETL, CRUD.
 # GLOBALs ------------------------------------------------------------
 TRANS_API_KEY = os.getenv("MY_GOOGLE_TRANS_API_KEY")
 GEMINI_API_KEY = os.getenv("MY_GEMINI_API_KEY")
-MYSQL_PASSWORD = os.getenv("$MYSQL_ROOT_PASSWORD")
+MYSQL_PASSWORD = os.getenv("MYSQL_ROOT_PASSWORD")
 
 
 ### Helpers
