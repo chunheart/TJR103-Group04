@@ -53,6 +53,7 @@ services:
       - $PWD/src:/opt/airflow/src
     environment:
       PYTHONPATH: "/opt/airflow/src"
+      TZ: Asia/Taipei
       AIRFLOW__WEBSERVER__SHOW_TRIGGER_FORM_IF_NO_PARAMS: "true"
       MY_GOOGLE_TRANS_API_KEY: $MY_GOOGLE_TRANS_API_KEY
       MY_GEMINI_API_KEY: $MY_GEMINI_API_KEY

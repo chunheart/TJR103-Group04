@@ -1,4 +1,5 @@
 import datetime as dt
+import pendulum
 from airflow.decorators import dag, task, bash_task
 from airflow.models.param import Param
 from airflow.operators.python import get_current_context
@@ -8,6 +9,7 @@ import cwyeh_mysql_etl.kafka.consume as kc
 
 
 # Setting
+TW_TZ = pendulum.timezone("Asia/Taipei")
 default_args = {
     "owner": "cwyeh",
     "depends_on_past": False,
@@ -24,7 +26,7 @@ default_args = {
     dag_id='init_db',
     default_args=default_args,
     schedule=None,
-    start_date=dt.datetime(2023, 1, 1),
+    start_date=dt.datetime(2023, 1, 1, tzinfo=TW_TZ),
     catchup=False,
     tags=["init"],
     params={"db_name":Param("EXAMPLE",type='string')},

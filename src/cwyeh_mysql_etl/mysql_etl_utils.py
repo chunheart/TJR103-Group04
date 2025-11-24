@@ -143,7 +143,8 @@ def batch_operator(batch_size,func):
 
 # Init ------------------------------------------------------------
 def get_mysql_connection(
-        host,port,user,password,
+        host,port,user,
+        password=MYSQL_PASSWORD,
         db=None,
         charset="utf8mb4",
         connect_timeout=5,

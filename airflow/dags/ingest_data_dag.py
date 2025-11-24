@@ -1,4 +1,5 @@
 import datetime as dt
+import pendulum
 from airflow.decorators import dag, task, bash_task
 
 import cwyeh_mysql_etl.mysql_etl_utils as myetl
@@ -6,6 +7,7 @@ import cwyeh_mysql_etl.kafka.consume as kc
 
 
 # Setting
+TW_TZ = pendulum.timezone("Asia/Taipei")
 default_args = {
     "owner": "cwyeh",
     "depends_on_past": False,
@@ -22,7 +24,7 @@ default_args = {
     dag_id='ingest_data',
     default_args=default_args,
     schedule="00 10 * * *",
-    start_date=dt.datetime(2023, 1, 1),
+    start_date=dt.datetime(2023, 1, 1, tzinfo=TW_TZ),
     catchup=False,
     tags=["ingest","stagging"],
 )

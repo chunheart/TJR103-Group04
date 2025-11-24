@@ -1,4 +1,5 @@
 import datetime as dt
+import pendulum
 
 from airflow.decorators import dag, task, bash_task
 from airflow.operators.python import get_current_context
@@ -18,6 +19,7 @@ def print_sth_or_not(res):
 
 
 # Setting
+TW_TZ = pendulum.timezone("Asia/Taipei")
 default_args = {
     "owner": "cwyeh",
     "depends_on_past": False,
@@ -35,7 +37,7 @@ default_args = {
     dag_id='etl_dump_coemission',
     default_args=default_args,
     schedule=None,
-    start_date=dt.datetime(2023, 1, 1),
+    start_date=dt.datetime(2023, 1, 1,tzinfo=TW_TZ),
     catchup=False,
     tags=["warehouse"],
 )

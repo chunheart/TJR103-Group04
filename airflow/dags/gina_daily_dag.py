@@ -58,8 +58,8 @@ with DAG(
         task_id="run_icook_daily",
         bash_command="""
         python /opt/airflow/src/gina_icook_crawler/daily.py \
-            --since "{{ (data_interval_start - macros.timedelta(days=1)).in_timezone('Asia/Taipei').strftime('%Y-%m-%d') }}" \
-            --before "{{ (data_interval_start - macros.timedelta(days=1)).in_timezone('Asia/Taipei').strftime('%Y-%m-%d') }}" \
+            --since "{{ (data_interval_start - macros.timedelta(days=0)).in_timezone('Asia/Taipei').strftime('%Y-%m-%d') }}" \
+            --before "{{ (data_interval_start - macros.timedelta(days=0)).in_timezone('Asia/Taipei').strftime('%Y-%m-%d') }}" \
             --debug
         """,
     )
