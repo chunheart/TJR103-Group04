@@ -16,7 +16,7 @@ LOG_FILE_PATH = LOG_FILE_DIR /  f"{FILENAME}_{datetime.today().date()}.log"
 LOGGER = get_logger(LOG_FILE_PATH, FILENAME)
 
 ### MySQL ###
-DB_NAME = "TJR103"
+# DB_NAME = "TJR103"
 TABLE_NAME = "recipe"
 
 ### CSV ###
@@ -43,44 +43,44 @@ def mysql_recipe():
     # Connect to MySQL
     LOGGER.info(f"Start connecting to MySQL ...")
     try:
-        conn = mysql_connection()
+        conn = vm_mysql_connection()
         LOGGER.info(f"Connected to MySQL")        
     except sql.MySQLError:
         print(f"Connection failed,{e}")
 
     # Create a database if not exist
-    LOGGER.info(f"Connecting to database: {DB_NAME} ...")
-    try:
-        db_name = DB_NAME
-        create_db(conn, db_name)
-        LOGGER.info(f"Connected to database: {DB_NAME}")
-    except Exception as e:
-        print(f"Failed to build a new table, {e}")
+    # LOGGER.info(f"Connecting to database: {DB_NAME} ...")
+    # try:
+    #     db_name = DB_NAME
+    #     create_db(conn, db_name)
+    #     LOGGER.info(f"Connected to database: {DB_NAME}")
+    # except Exception as e:
+    #     print(f"Failed to build a new table, {e}")
     
     # Create a table if not exist
-    LOGGER.info(f"Start checking if {TABLE_NAME} exists ...")
-    try:
-        schema = f"""
-        CREATE TABLE `recipe` (
-            `recipe_id`      VARCHAR(64)  NOT NULL,
-            `recipe_site`    VARCHAR(100) NOT NULL,
-            `recipe_name`    VARCHAR(255),
-            `recipe_url`  VARCHAR(255),
-            `author`         VARCHAR(100),
-            `servings`       FLOAT,
-            `publish_time`   DATETIME,
-            `crawl_time`     DATETIME,
-            `ins_time` DATETIME DEFAULT CURRENT_TIMESTAMP,
-            `upd_time` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            PRIMARY KEY (`recipe_id`, `recipe_site`)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-        """
-        table_info = f"{schema}"
-        LOGGER.info(f"Show {TABLE_NAME} Schema :\n{table_info}")
-        create_table(conn, schema)
-        LOGGER.info(f"{TABLE_NAME} exists")
-    except Exception as e:
-        LOGGER.error(e)
+    # LOGGER.info(f"Start creating table {TABLE_NAME} ...")
+    # try:
+    #     schema = f"""
+    #     CREATE TABLE `recipe` (
+    #         `recipe_id`      VARCHAR(64)  NOT NULL,
+    #         `recipe_site`    VARCHAR(100) NOT NULL,
+    #         `recipe_name`    VARCHAR(255),
+    #         `recipe_url`  VARCHAR(255),
+    #         `author`         VARCHAR(100),
+    #         `servings`       FLOAT,
+    #         `publish_time`   DATETIME,
+    #         `crawl_time`     DATETIME,
+    #         `ins_time` DATETIME DEFAULT CURRENT_TIMESTAMP,
+    #         `upd_time` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    #         PRIMARY KEY (`recipe_id`, `recipe_site`)
+    #     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    #     """
+    #     table_info = f"{schema}"
+    #     LOGGER.info(f"Show {TABLE_NAME} Schema :\n{table_info}")
+    #     create_table(conn, schema)
+    #     LOGGER.info(f"{TABLE_NAME} exists")
+    # except Exception as e:
+    #     LOGGER.error(e)
 
     
 
@@ -109,6 +109,13 @@ def mysql_recipe():
         except sql.MySQLError as e:
             conn.rollback()
             LOGGER.critical(f"Batch insert failed. Error: {e}")
+        finally:
+            cursor.close()
+            LOGGER.info(f"Cursor has been closed.")
+            conn.close()
+            LOGGER.info(f"Disconnected the connection to MySQL server.")
+
+
 
     #     for index, row in recipe_df.iterrows():
     #         try:
