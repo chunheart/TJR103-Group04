@@ -301,28 +301,31 @@ def init_tables(
 
     ### create additional index
     if create_index:
-        try:
-            index_ddls = [
-                """
-                CREATE INDEX idx_u2g_status
-                ON unit_normalize (u2g_status);
-                """,
-                """
-                CREATE INDEX idx_coe_status
-                ON carbon_emission (coe_status);
-                """,
-                """
-                CREATE INDEX idx_normalize_status
-                ON ingredient_normalize (normalize_status);
-                """,
-            ]
-            for ddl in index_ddls:
+        index_ddls = [
+            """
+            CREATE INDEX idx_u2g_status
+            ON unit_normalize (u2g_status);
+            """,
+            """
+            CREATE INDEX idx_coe_status
+            ON carbon_emission (coe_status);
+            """,
+            """
+            CREATE INDEX idx_normalize_status
+            ON ingredient_normalize (normalize_status);
+            """,
+            """
+            CREATE INDEX idx_publish_time ON recipe (publish_time)
+            """,
+        ]
+        for ddl in index_ddls:
+            try:
                 cursor.execute(ddl)
-        except pymysql.err.OperationalError as e:
-            # 若索引已存在會拋錯 “Duplicate key name”
-            print('Duplicated idx:',e)
-        except Exception as e:
-            print('Other errors:',e)
+            except pymysql.err.OperationalError as e:
+                # 若索引已存在會拋錯 “Duplicate key name”
+                print('Duplicated idx:',e)
+            except Exception as e:
+                print('Other errors:',e)
 
     ### Insert example records
     if insert_example_records:
