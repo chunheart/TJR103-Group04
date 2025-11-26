@@ -49,7 +49,7 @@ def remove_parentheses(s:str) -> str:
     return s
 
 def unwind(df:pd.DataFrame, col_name:str)-> pd.DataFrame | None:
-    mix_separator_pattern = r"[,，/| ]+"
+    mix_separator_pattern = r"[,，/|]+"
     df_exploded = (
         df.assign(ingredients=df[col_name].str.split(pat=mix_separator_pattern, regex=True))
         .explode(col_name)

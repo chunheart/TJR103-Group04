@@ -136,9 +136,11 @@ def mysql_recipe():
     except Exception as e:
         LOGGER.error(f"System error: {e}")
 
+    cursor.close()
+    LOGGER.info(f"Cursor is Disconnected")
 
     conn.close()
-    LOGGER.info(f"Disconnected")
+    LOGGER.info(f"MySQL server is Disconnected")
     
 
 if __name__ == "__main__":
