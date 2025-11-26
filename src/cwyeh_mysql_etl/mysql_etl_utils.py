@@ -50,14 +50,30 @@ def query_unit2gram(pair_list,batch_size=30) -> list:
             self.mapping_db = super()._load_mapping_db()
     my_nor_unit = SimpleUnitNormalize(key=GEMINI_API_KEY)
 
+    ### ask gemini
     size = len(pair_list)
     batch = math.ceil(size/batch_size)
     res_collect = []
     for b in range(batch):
         b_res = my_nor_unit.ask_gemini(pair_list[b*batch_size:(b+1)*batch_size])
         res_collect += b_res.get('items',[])
-    return res_collect
 
+    ### if not found - use adhoc rule
+    for r in res_collect:
+        unit = r.get('unit')
+        unit2gram_value = r.get('g_per_unit')
+        if unit2gram_value == 0 or unit2gram_value == None:
+            print('Try to use pre-defined rule')
+            if unor.STANDARD_RULES.get(unit):
+                print('Update with pre-defined rule STANDARD_RULES')
+                r['g_per_unit'] = unor.STANDARD_RULES.get(unit)
+            elif unor.VOLUME_TO_ML.get(unit):
+                print('Update with pre-defined rule VOLUME_TO_ML')
+                r['g_per_unit'] = unor.VOLUME_TO_ML.get(unit)
+            else:
+                print('Fail to capture in pre-defined rule')
+                r['g_per_unit'] = None
+    return res_collect
 
 
 def translate(qlist: list[str], key, target_lang: str = "zh-TW") -> list[str]:
@@ -110,8 +126,9 @@ def query_coemission(nor_ingredient_name: list[str]) -> dict:
 
     ### clean response carbon data [keep 1 for each query]
     # (1) prod_name contain in query (2) keep top 3 similar name and avg
-    filter_if_contain = res.apply(lambda r: r["query"] in r["prod_name"],axis=1)
-    cleaned_res = res[filter_if_contain].copy()  # To avoid [SettingWithCopyWarning]
+    # filter_if_contain = res.apply(lambda r: r["query"] in r["prod_name"],axis=1)
+    # cleaned_res = res[filter_if_contain].copy()  # To avoid [SettingWithCopyWarning]
+    cleaned_res = res.copy()
     if cleaned_res.shape[0] == 0:
         print('[Warning] No at least 1 valid record')
         return fail_res
