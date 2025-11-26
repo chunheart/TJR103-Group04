@@ -48,7 +48,7 @@ docker compose -f src/gina_icook_crawler/kafka/docker-compose.yml up -d
 # start containers: mysql, airflow-python
 # build image (py_airflow) if not existing
 # [to rebuild] add --build
-docker compose -f service/mysql_etl/docker-compose.yaml up -d
+docker compose -f service/mysql_etl/docker-compose.yaml up -d --build
 
 # add py_airflow into kafka's network
 # (hostname the same as container name: kafka-server)
@@ -150,8 +150,8 @@ export AIRFLOW_PASSWORD="$(echo "${SECRET_JSON}"       | jq -r '.airflow_passwor
 echo "[DONE] get secrets"
 
 # ---------- Bring up containers ----------
-docker compose -f src/gina_icook_crawler/kafka/docker-compose.yml up -d
-docker compose -f service/mysql_etl/docker-compose.yaml up -d
+docker compose -f src/gina_icook_crawler/kafka/docker-compose.yml up -d 
+docker compose -f service/mysql_etl/docker-compose.yaml up -d --build
 docker network connect kafka_kafka-net py_airflow
 echo "[DONE] start containers"
 ``` 
