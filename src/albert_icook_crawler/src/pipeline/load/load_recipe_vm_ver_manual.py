@@ -18,9 +18,9 @@ LOGGER = get_logger(LOG_FILE_PATH, FILENAME)
 ### MySQL ###
 # DB_NAME = "TJR103"
 TABLE_NAME = "recipe"
-
+MANUAL_DATE = "2025-11-12"
 ### CSV ###
-CSV_FILE_PATH = ROOT_DIR / "data" / "db_recipe" / f"icook_recipe_{datetime.today().date()}_recipes.csv"
+CSV_FILE_PATH = ROOT_DIR / "data" / "db_recipe" / f"icook_recipe_{MANUAL_DATE}_recipes.csv"
 
 def mysql_recipe():
     """
@@ -109,14 +109,7 @@ def mysql_recipe():
         except sql.MySQLError as e:
             conn.rollback()
             LOGGER.critical(f"Batch insert failed. Error: {e}")
-        finally:
-            cursor.close()
-            LOGGER.info(f"Cursor has been closed.")
-            conn.close()
-            LOGGER.info(f"Disconnected the connection to MySQL server.")
-
-
-
+            
     #     for index, row in recipe_df.iterrows():
     #         try:
     #             recipe_id = row.iloc[0]
@@ -144,8 +137,10 @@ def mysql_recipe():
         LOGGER.error(f"System error: {e}")
 
 
+    cursor.close()
+    LOGGER.info(f"Cursor has been closed.")
     conn.close()
-    LOGGER.info(f"Disconnected")
+    LOGGER.info(f"Disconnected the connection to MySQL server.")
     
 
 if __name__ == "__main__":

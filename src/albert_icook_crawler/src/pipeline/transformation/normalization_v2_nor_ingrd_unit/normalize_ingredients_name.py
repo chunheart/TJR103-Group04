@@ -27,9 +27,9 @@ CSV_FILE_PATH = ROOT_DIR / "data" / "db_ingredients" / f"icook_recipe_{datetime.
 COLLECTION = "ingredient_normalize"
 
 DATA_ROOT_DIR = Path(__file__).resolve().parents[4]
-SAVED_FILE_DIR = DATA_ROOT_DIR / "data" / "db_ingredient_normalize"
-SAVED_FILE_DIR.mkdir(parents=True, exist_ok=True)
-SAVED_FILE_PATH =  SAVED_FILE_DIR / "icook_recipe_ingredient_normalize.csv"
+REFERNCE_FILE_DIR = DATA_ROOT_DIR / "data" / "db_ingredient_normalize"
+REFERNCE_FILE_DIR.mkdir(parents=True, exist_ok=True)
+REFERNCE_FILE_PATH =  REFERNCE_FILE_DIR / "icook_recipe_ingredient_normalize.csv"
 
 logger = get_logger(log_file_path=LOG_FILE_PATH, logger_name=FILENAME)
 
@@ -225,7 +225,7 @@ def process_ingredients_pipeline(dt:pd.DataFrame, ref_path:Path):
 
     # Save to disk
     output_norm_ingred_name_file = ROOT_DIR / f"data/db_ingredients/icook_recipe_{datetime.today().date()}_recipe_ingredients_name_norm.csv"
-    output_ref_file = SAVED_FILE_PATH
+    output_ref_file = REFERNCE_FILE_PATH
     
     df_sample.to_csv(output_norm_ingred_name_file, index=False, encoding='utf-8-sig')
     df_ref_updated.to_csv(output_ref_file, index=False, encoding='utf-8-sig')
@@ -263,29 +263,6 @@ def normalize_ingrd_name():
 
     logger.info(f"Starting execution of {FILENAME}")
 
-    # logger.info("Connecting to MongoDB...")
-    # try:
-    #     conn = mondb.connect_to_local_mongodb()
-    # except Exception as e:
-    #     logger.error(f"Failed to establish MongoDB connection: {e}")
-
-    #     logger.critical(f"Aborting execution of {FILENAME} due to fatal error")
-    #     sys.exit(1)
-
-    # logger.info(f"Connected to MongoDB")
-
-    # logger.info("Connecting to Database, mydatabase...")
-    # try:
-    #     db = conn[DATABASE]
-    #     logger.info("Connected to Database, mydatabase...")
-    # except Exception as e:
-    #     logger.error(f"Failed to connect to Database: {e}")
-    #     conn.close()
-    #     logger.critical(f"Closed connection to MongoDB")
-    #     logger.critical(f"Aborting execution of {FILENAME} due to fatal error")
-    #     sys.exit(1)
-
-    # collection = db[COLLECTION]
     try:
         with open(file=CSV_FILE_PATH, mode="r", encoding="utf-8-sig") as csv:
             raw_df = pd.read_csv(csv)
@@ -315,8 +292,7 @@ def normalize_ingrd_name():
         ingredient_norm_df.info()
         logger.info(f"Removed parenthese")
         
-        print(ingredient_norm_df)
-        ingredient_norm_df.to_csv("sample_original_ingredients_data", index=False)
+
         ### Call Gemini to help normalize ingredient names
         """
         AI will get the dataframe and it has to categorise the original ingredient names to get the standarized name.
@@ -326,54 +302,21 @@ def normalize_ingrd_name():
         """
         # File configurations
         
-        input_ref_file = SAVED_FILE_PATH 
+        input_ref_file = REFERNCE_FILE_PATH 
         
         # Check for file existence
         if os.path.exists(input_ref_file):
             process_ingredients_pipeline(
                 ingredient_norm_df,
-                SAVED_FILE_PATH,
+                REFERNCE_FILE_PATH,
             )
         else:
             logger.error(" Error: Input files not found. Please verify filenames.")
-
-        # # Drop Null values of field ingredients
-        # logger.info("Dropping the values that are Null...")
-        # ingredient_df.dropna(subset=["ingredients"], inplace=True)
-        # logger.info("Dropping completed")
-
-        # # Unwind values of field ingredients
-        # logger.info("Unwinding ...")
-        # ingredient_df_explode = unwind(ingredient_df, "ingredients")
-        # logger.info("Unwinding completed")
-        
-
-
-        # Save the final result into CSV file
-        # df_final.to_csv(SAVED_FILE_PATH, index=False)
-
-        # Convert DataFrame into Dict
-        # logger.info("Converting dataframe to list of dictionaries...")
-        # result_list = df_final.to_dict(orient="records")
-
-        # Load to MongoDB(MySQL)
-        # try:
-        #     lines = len(result_list)
-        #     collection.insert_many(result_list)
-        #     result_list.clear()
-        #     logger.info(f"Inserted {lines} records")
-        #     logger.info(f"Execution completed")
-
-
-        # except Exception as e:
-            # logger.error(f"Failed to upload converted file to {collection}: {e}")
 
     except Exception as e:
         logger.error(f"{e}")
 
     finally:
-        # conn.close()
-        # logger.info(f"Disconnect to MongoDB")
         logger.info(f"Finished execution of {FILENAME}")
 
 

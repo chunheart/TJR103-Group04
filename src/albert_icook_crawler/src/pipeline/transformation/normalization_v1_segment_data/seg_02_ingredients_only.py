@@ -294,29 +294,6 @@ def get_ingredients_info():
 
     logger.info(f"Starting execution of {FILENAME}")
 
-    # logger.info("Connecting to MongoDB...")
-    # try:
-    #     conn = mondb.connect_to_local_mongodb()
-    # except Exception as e:
-    #     logger.error(f"Failed to establish MongoDB connection: {e}")
-
-    #     logger.critical(f"Aborting execution of {FILENAME} due to fatal error")
-    #     sys.exit(1)
-
-    # logger.info(f"Connected to MongoDB")
-
-    # logger.info("Connecting to Database, mydatabase...")
-    # try:
-    #     db = conn[DATABASE]
-    #     logger.info("Connected to Database, mydatabase...")
-    # except Exception as e:
-    #     logger.error(f"Failed to connect to Database: {e}")
-    #     conn.close()
-    #     logger.critical(f"Closed connection to MongoDB")
-    #     logger.critical(f"Aborting execution of {FILENAME} due to fatal error")
-    #     sys.exit(1)
-
-    # collection = db[COLLECTION]
     try:
         with open(file=CSV_FILE_PATH, mode="r", encoding="utf-8-sig") as csv:
             raw_df = pd.read_csv(csv)
@@ -398,28 +375,10 @@ def get_ingredients_info():
         # Save the final result into CSV file
         df_final.to_csv(SAVED_FILE_PATH, index=False)
 
-        # Convert DataFrame into Dict
-        # logger.info("Converting dataframe to list of dictionaries...")
-        # result_list = df_final.to_dict(orient="records")
-
-        # Load to MongoDB(MySQL)
-        # try:
-        #     lines = len(result_list)
-        #     collection.insert_many(result_list)
-        #     result_list.clear()
-        #     logger.info(f"Inserted {lines} records")
-        #     logger.info(f"Execution completed")
-
-
-        # except Exception as e:
-            # logger.error(f"Failed to upload converted file to {collection}: {e}")
-
     except Exception as e:
         logger.error(f"{e}")
 
     finally:
-        # conn.close()
-        # logger.info(f"Disconnect to MongoDB")
         logger.info(f"Finished execution of {FILENAME}")
 
 
