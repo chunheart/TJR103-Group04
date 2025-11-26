@@ -1,4 +1,5 @@
 import datetime as dt
+import pendulum
 
 from airflow.decorators import dag, task, bash_task
 from airflow.operators.python import get_current_context
@@ -18,6 +19,7 @@ def print_sth_or_not(res):
 
 
 # Setting
+TW_TZ = pendulum.timezone("Asia/Taipei")
 default_args = {
     "owner": "cwyeh",
     "depends_on_past": False,
@@ -26,6 +28,7 @@ default_args = {
     "email_on_retry": False,
     "retries": 1,
     "retry_delay": dt.timedelta(minutes=1),
+    "dagrun_timeout":dt.timedelta(hours=1),
 }
 
 
@@ -34,7 +37,7 @@ default_args = {
     dag_id='etl_dump_coemission',
     default_args=default_args,
     schedule=None,
-    start_date=dt.datetime(2023, 1, 1),
+    start_date=dt.datetime(2023, 1, 1,tzinfo=TW_TZ),
     catchup=False,
     tags=["warehouse"],
 )
@@ -55,7 +58,7 @@ def etl_dump_coemission():
         dump data into coemission
         """
         with myetl.get_mysql_connection(
-                host='mysql',port=3306,user='root',password='pas4word',db='EXAMPLE',
+                host='mysql',port=3306,user='root',db='EXAMPLE',
             ) as my_conn:
             myetl.register_coemission(my_conn, res)
             print('[DONE] dump myemission data into carbon emission')

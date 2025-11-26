@@ -27,6 +27,7 @@ Utils for mysql ETL, CRUD.
 # GLOBALs ------------------------------------------------------------
 TRANS_API_KEY = os.getenv("MY_GOOGLE_TRANS_API_KEY")
 GEMINI_API_KEY = os.getenv("MY_GEMINI_API_KEY")
+MYSQL_PASSWORD = os.getenv("MYSQL_ROOT_PASSWORD")
 
 
 ### Helpers
@@ -142,7 +143,8 @@ def batch_operator(batch_size,func):
 
 # Init ------------------------------------------------------------
 def get_mysql_connection(
-        host,port,user,password,
+        host,port,user,
+        password=MYSQL_PASSWORD,
         db=None,
         charset="utf8mb4",
         connect_timeout=5,
@@ -281,22 +283,29 @@ def init_tables(
         cursor.execute(ddl)
 
     ### create additional index
-    index_ddls = [
-        """
-        CREATE INDEX idx_u2g_status
-        ON unit_normalize (u2g_status);
-        """,
-        """
-        CREATE INDEX idx_coe_status
-        ON carbon_emission (coe_status);
-        """,
-        """
-        CREATE INDEX idx_normalize_status
-        ON ingredient_normalize (normalize_status);
-        """,
-    ]
-    for ddl in index_ddls:
-        cursor.execute(ddl)
+    if create_index:
+        try:
+            index_ddls = [
+                """
+                CREATE INDEX idx_u2g_status
+                ON unit_normalize (u2g_status);
+                """,
+                """
+                CREATE INDEX idx_coe_status
+                ON carbon_emission (coe_status);
+                """,
+                """
+                CREATE INDEX idx_normalize_status
+                ON ingredient_normalize (normalize_status);
+                """,
+            ]
+            for ddl in index_ddls:
+                cursor.execute(ddl)
+        except pymysql.err.OperationalError as e:
+            # 若索引已存在會拋錯 “Duplicate key name”
+            print('Duplicated idx:',e)
+        except Exception as e:
+            print('Other errors:',e)
 
     ### Insert example records
     if insert_example_records:

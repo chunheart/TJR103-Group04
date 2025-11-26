@@ -1,4 +1,5 @@
 import datetime as dt
+import pendulum
 
 from airflow.decorators import dag, task, bash_task
 from airflow.operators.python import get_current_context
@@ -18,6 +19,7 @@ def print_sth_or_not(res):
 
 
 # Setting
+TW_TZ = pendulum.timezone("Asia/Taipei")
 default_args = {
     "owner": "cwyeh",
     "depends_on_past": False,
@@ -26,6 +28,7 @@ default_args = {
     "email_on_retry": False,
     "retries": 0,
     "retry_delay": dt.timedelta(minutes=1),
+    "dagrun_timeout":dt.timedelta(hours=1),
 }
 
 
@@ -34,7 +37,7 @@ default_args = {
     dag_id='etl_mysql_warehouse',
     default_args=default_args,
     schedule="00 11 * * *",
-    start_date=dt.datetime(2023, 1, 1),
+    start_date=dt.datetime(2023, 1, 1, tzinfo=TW_TZ),
     catchup=False,
     tags=["warehouse"],
     params = {"tar_date":Param((dt.datetime.now() - dt.timedelta(days=1)).strftime("%Y%m%d"),type='string'),
@@ -82,7 +85,7 @@ def etl_mysql_warehouse():
         print("Running Task 3")
         if res:
             with myetl.get_mysql_connection(
-                host='mysql',port=3306,user='root',password='pas4word',db='EXAMPLE',
+                host='mysql',port=3306,user='root',db='EXAMPLE',
             ) as my_conn:
                 myetl.register_recipe(my_conn, res)
                 print('[DONE] insert into recipe')
@@ -101,7 +104,7 @@ def etl_mysql_warehouse():
         """
         if res:
             with myetl.get_mysql_connection(
-                host='mysql',port=3306,user='root',password='pas4word',db='EXAMPLE',
+                host='mysql',port=3306,user='root',db='EXAMPLE',
             ) as my_conn:
                 myetl.update_unit_w_u2g(my_conn)
                 myetl.update_ingredient_w_normalize(my_conn)
