@@ -1,3 +1,4 @@
+import os
 import pandas as pd
 import numpy as np
 
@@ -5,6 +6,12 @@ from datetime import datetime
 from pathlib import Path
 
 ROOT_DIR = Path(__file__).resolve().parents[4]
+
+FILENAME = os.path.basename(__file__).split(".")[0]
+LOG_FILE_DIR = ROOT_DIR / "src" / "logs" / f"logs={datetime.today().date()}"
+LOG_FILE_DIR.mkdir(parents=True, exist_ok=True)
+LOG_FILE_PATH = LOG_FILE_DIR /  f"{FILENAME}_{datetime.today().date()}.log"
+
 INGREDIENT_FILE_PATH = ROOT_DIR / "data" / "db_ingredients" / f"icook_recipe_{datetime.today().date()}_recipe_ingredients_unitN.csv"
 REFERENCE_FILE_PATH = ROOT_DIR / "data" / "db_unit_normalization" / "unit_normalization_db.csv"
 RESULT_DIR = ROOT_DIR / "data" / "db_ingredients" / "combine"

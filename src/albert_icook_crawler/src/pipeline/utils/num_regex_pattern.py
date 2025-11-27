@@ -110,6 +110,7 @@ CMP_PATTERN_WITH_CHINESE_FRACTION_RANGE = re.compile(
 CHAR_NUM_MAPS = {
     "零": 0,
     "半": 0.5,
+    "一半": 0.5,
     "一": 1,
     "二": 2,
     "三": 3,

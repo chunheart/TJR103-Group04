@@ -162,6 +162,8 @@ def construct_hybrid_language_prompt(target_rows: pd.DataFrame) -> str:
 
     # Core Objective
     We need to standardize units for Carbon Footprint calculation, but keep natural units readable in Chinese.
+    One thing you must comply to is that there is no way to leave null in the field of 'unit_number' and 'unit_name'.
+    You must fill an answer by analyzing the information given in row. 
 
     # Rules for unit_name Output (CRITICAL)
     1. **Metric unit_names (Keep English)**: 
