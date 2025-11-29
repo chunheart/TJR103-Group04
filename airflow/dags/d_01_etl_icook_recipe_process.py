@@ -5,7 +5,7 @@ from albert_icook_crawler.src.pipeline.extract.scrapy_app_icook import IcookDail
 from albert_icook_crawler.src.pipeline.transformation.normalization_v1_segment_data import seg_01_recipe_only as recipe
 from albert_icook_crawler.src.pipeline.transformation.normalization_v1_segment_data import seg_02_ingredients_only as ingredient
 from albert_icook_crawler.src.pipeline.transformation.normalization_v2_nor_ingrd_unit import normalize_ingredients_name as n_ingrd_name
-from albert_icook_crawler.src.pipeline.transformation.normalization_v2_nor_ingrd_unit.kevin_food_unit_normalization import app 
+from albert_icook_crawler.src.pipeline.transformation.normalization_v2_nor_ingrd_unit.kevin_food_unit_normalization import app_v1
 
 from airflow.decorators import dag, task
 from airflow.operators.python import PythonOperator
@@ -87,7 +87,7 @@ def d_01_etl_icook_recipe_process():
 
     @task
     def normalize_unit(pre_task):
-        app.normalize_unit()
+        app_v1.normalize_unit()
         return "Normalised ingredient's unit"
 
 

@@ -193,10 +193,7 @@ def match_num_with_chinese(matches) -> float | Decimal | str | None:
             try:
                 numerator = float(rep.CHAR_NUM_MAPS[char_fraction[-1]])
                 denominator = float(rep.CHAR_NUM_MAPS[char_fraction[0]])
-                number_part = float((numerator / denominator)).quantize(
-                    Decimal("0.01"),
-                    rounding=ROUND_HALF_UP,
-                )
+                number_part = float((numerator / denominator))
                 return number_part
             except ValueError as e:
                 print(f"{matches} has an issue. \n{e}")

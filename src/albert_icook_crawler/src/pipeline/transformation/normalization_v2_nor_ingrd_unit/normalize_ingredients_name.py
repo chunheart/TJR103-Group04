@@ -75,20 +75,58 @@ def fetch_gemini_normalization(unknown_ingredients):
 
     # Construct the prompt
     # We provide strict instructions on how to handle food names
+    # prompt = f"""
+    # You are an expert data engineer specializing in food ingredients.
+    # Your task is to normalize the following list of raw ingredient names into their standard, simplified forms (Traditional Chinese).
+    
+    # ### Rules:
+    # 1. **Remove Adjectives**: Ignore quantity, temperature, cutting styles, or brands (e.g., "Hot Water" -> "Water", "Diced Pork" -> "Pork").
+    # 2. **Standardize**: Use the most common, generic name for the ingredient (e.g., "High-gluten flour" -> "麵粉").
+    # 3. **Cooking Oils**: Generalize ALL types of edible oils (e.g., Olive oil, Sesame oil, Canola oil, Butter) to "食用油".
+    # 4. **Output Format**: Return a JSON object {{ "raw_name": "normalized_name" }}.
+    
+    # ### Input List:
+    # {json.dumps(unknown_ingredients, ensure_ascii=False)}
+    # """
     prompt = f"""
-    You are an expert data engineer specializing in food ingredients.
-    Your task is to normalize the following list of raw ingredient names into their standard, simplified forms (Traditional Chinese).
-    
-    ### Rules:
-    1. **Remove Adjectives**: Ignore quantity, temperature, cutting styles, or brands (e.g., "Hot Water" -> "Water", "Diced Pork" -> "Pork").
-    2. **Standardize**: Use the most common, generic name for the ingredient (e.g., "High-gluten flour" -> "麵粉").
-    3. **Cooking Oils**: Generalize ALL types of edible oils (e.g., Olive oil, Sesame oil, Canola oil, Butter) to "食用油".
-    4. **Output Format**: Return a JSON object {{ "raw_name": "normalized_name" }}.
-    
+    You are an expert Data Engineer and Sustainability Analyst specializing in food supply chains.
+    Your task is to normalize a list of raw ingredient names into their **Single Primary Raw Material** (Traditional Chinese), based on **Carbon Footprint Priority**.
+
+    ### 1. The Core Rule (Carbon Hierarchy)
+    When a name implies multiple ingredients (e.g., "Dumplings"), you must identify the components and select the ONE with the **Highest Carbon Footprint** based on this hierarchy (High to Low):
+    1. **Red Meat** (Beef, Lamb) --- [HIGHEST PRIORITY]
+    2. **White Meat/Seafood** (Pork, Chicken, Fish)
+    3. **Dairy & Eggs** (Milk, Cheese, Butter)
+    4. **Oils** (All types map to "食用油")
+    5. **Grains & Nuts** (Rice, Wheat, Beans)
+    6. **Vegetables, Fruits, Spices** --- [LOWEST PRIORITY]
+
+    ### 2. Few-Shot Learning (Examples)
+    Learn from these logic patterns:
+    - Input: "韭菜水餃" (Leek + Pork + Flour). Carbon: Pork > Flour > Leek. -> Output: "豬肉"
+    - Input: "拿鐵咖啡" (Milk + Coffee). Carbon: Milk > Coffee. -> Output: "牛奶"
+    - Input: "特級初榨橄欖油" (Oil). Rule: Generalize. -> Output: "食用油"
+    - Input: "黑醋栗" (Blackcurrant). It is a raw fruit/berry. -> Output: "黑醋栗"
+    - Input: "酥炸雞腿" (Chicken + Oil + Flour). Carbon: Chicken > Oil. -> Output: "雞肉"
+    - Input: "蘋果醋" (Apple + Vinegar). Carbon: Apple (Low). -> Output: "蘋果"
+
+    ### 3. Step-by-Step Execution (Chain of Thought)
+    For each item in the input list:
+    1. **Analyze**: Identify all potential raw ingredients in the name.
+    2. **Filter**: Remove adjectives (hot, diced, spicy) and brands.
+    3. **Compare**: Apply the [Carbon Hierarchy] to find the "heaviest" ingredient.
+    4. **Normalize**: Output only that specific raw material name in Traditional Chinese.
+
     ### Input List:
     {json.dumps(unknown_ingredients, ensure_ascii=False)}
-    """
 
+    ### Output Format:
+    Return ONLY a valid JSON object. Do not include markdown formatting (like ```json).
+    {{
+        "raw_name_1": "normalized_result_1",
+        "raw_name_2": "normalized_result_2"
+    }}
+    """
     try:
         # specific call to generate content
         response = model.generate_content(prompt)

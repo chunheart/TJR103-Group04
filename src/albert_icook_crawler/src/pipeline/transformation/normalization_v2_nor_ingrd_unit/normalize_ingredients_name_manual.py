@@ -1,7 +1,9 @@
+import math
 import json
 import google.generativeai as genai
 import pandas as pd
-import os, sys
+import os
+import time
 import re
 import albert_icook_crawler.src.utils.mongodb_connection as mondb
 from albert_icook_crawler.src.utils.get_logger import get_logger
@@ -25,7 +27,8 @@ LOG_FILE_PATH = LOG_FILE_DIR /  f"{FILENAME}_{datetime.today().date()}.log"
 
 MANUAL_DATE = "2025-11-12"
 
-CSV_FILE_PATH = ROOT_DIR / "data" / "db_ingredients" / f"icook_recipe_{MANUAL_DATE}_recipe_ingredients.csv"
+# CSV_FILE_PATH = ROOT_DIR / "data" / "db_ingredients" / f"icook_recipe_{MANUAL_DATE}_recipe_ingredients.csv"
+CSV_FILE_PATH = "/opt/airflow/src/albert_icook_crawler/data/yotower_ori_ingredient/all_ingredient_names_cleaned_ytower.csv"
 COLLECTION = "ingredient_normalize"
 
 DATA_ROOT_DIR = Path(__file__).resolve().parents[4]
@@ -77,20 +80,58 @@ def fetch_gemini_normalization(unknown_ingredients):
 
     # Construct the prompt
     # We provide strict instructions on how to handle food names
+    # prompt = f"""
+    # You are an expert data engineer specializing in food ingredients.
+    # Your task is to normalize the following list of raw ingredient names into their standard, simplified forms (Traditional Chinese).
+    
+    # ### Rules:
+    # 1. **Remove Adjectives**: Ignore quantity, temperature, cutting styles, or brands (e.g., "Hot Water" -> "Water", "Diced Pork" -> "Pork").
+    # 2. **Standardize**: Use the most common, generic name for the ingredient (e.g., "High-gluten flour" -> "麵粉").
+    # 3. **Cooking Oils**: Generalize ALL types of edible oils (e.g., Olive oil, Sesame oil, Canola oil, Butter) to "食用油".
+    # 4. **Output Format**: Return a JSON object {{ "raw_name": "normalized_name" }}.
+    
+    # ### Input List:
+    # {json.dumps(unknown_ingredients, ensure_ascii=False)}
+    # """
     prompt = f"""
-    You are an expert data engineer specializing in food ingredients.
-    Your task is to normalize the following list of raw ingredient names into their standard, simplified forms (Traditional Chinese).
-    
-    ### Rules:
-    1. **Remove Adjectives**: Ignore quantity, temperature, cutting styles, or brands (e.g., "Hot Water" -> "Water", "Diced Pork" -> "Pork").
-    2. **Standardize**: Use the most common, generic name for the ingredient (e.g., "High-gluten flour" -> "麵粉").
-    3. **Cooking Oils**: Generalize ALL types of edible oils (e.g., Olive oil, Sesame oil, Canola oil, Butter) to "食用油".
-    4. **Output Format**: Return a JSON object {{ "raw_name": "normalized_name" }}.
-    
+    You are an expert Data Engineer and Sustainability Analyst specializing in food supply chains.
+    Your task is to normalize a list of raw ingredient names into their **Single Primary Raw Material** (Traditional Chinese), based on **Carbon Footprint Priority**.
+
+    ### 1. The Core Rule (Carbon Hierarchy)
+    When a name implies multiple ingredients (e.g., "Dumplings"), you must identify the components and select the ONE with the **Highest Carbon Footprint** based on this hierarchy (High to Low):
+    1. **Red Meat** (Beef, Lamb) --- [HIGHEST PRIORITY]
+    2. **White Meat/Seafood** (Pork, Chicken, Fish)
+    3. **Dairy & Eggs** (Milk, Cheese, Butter)
+    4. **Oils** (All types map to "食用油")
+    5. **Grains & Nuts** (Rice, Wheat, Beans)
+    6. **Vegetables, Fruits, Spices** --- [LOWEST PRIORITY]
+
+    ### 2. Few-Shot Learning (Examples)
+    Learn from these logic patterns:
+    - Input: "韭菜水餃" (Leek + Pork + Flour). Carbon: Pork > Flour > Leek. -> Output: "豬肉"
+    - Input: "拿鐵咖啡" (Milk + Coffee). Carbon: Milk > Coffee. -> Output: "牛奶"
+    - Input: "特級初榨橄欖油" (Oil). Rule: Generalize. -> Output: "食用油"
+    - Input: "黑醋栗" (Blackcurrant). It is a raw fruit/berry. -> Output: "黑醋栗"
+    - Input: "酥炸雞腿" (Chicken + Oil + Flour). Carbon: Chicken > Oil. -> Output: "雞肉"
+    - Input: "蘋果醋" (Apple + Vinegar). Carbon: Apple (Low). -> Output: "蘋果"
+
+    ### 3. Step-by-Step Execution (Chain of Thought)
+    For each item in the input list:
+    1. **Analyze**: Identify all potential raw ingredients in the name.
+    2. **Filter**: Remove adjectives (hot, diced, spicy) and brands.
+    3. **Compare**: Apply the [Carbon Hierarchy] to find the "heaviest" ingredient.
+    4. **Normalize**: Output only that specific raw material name in Traditional Chinese.
+
     ### Input List:
     {json.dumps(unknown_ingredients, ensure_ascii=False)}
-    """
 
+    ### Output Format:
+    Return ONLY a valid JSON object. Do not include markdown formatting (like ```json).
+    {{
+        "raw_name_1": "normalized_result_1",
+        "raw_name_2": "normalized_result_2"
+    }}
+    """
     try:
         # specific call to generate content
         response = model.generate_content(prompt)
@@ -162,15 +203,39 @@ def process_ingredients_pipeline(dt:pd.DataFrame, ref_path:Path):
     # ==========================================
     # 3. Gemini API Analysis (Smart Layer)
     # ==========================================
-    unique_unknowns = list(set(unknown_buffer))
+    unique_unknowns = list(set(unknown_buffer)) # Deduplicate to save costs
     ai_generated_map = {}
 
     if unique_unknowns:
-        print(f"Analyzing {len(unique_unknowns)} unique unknown items with Gemini...")
-        ai_generated_map = fetch_gemini_normalization(unique_unknowns)
-        logger.info(f" Gemini successfully mapped {len(ai_generated_map)} items.")
+        total_unknowns = len(unique_unknowns)
+        BATCH_SIZE = 30 # Process 30 ingredients at a time
+        total_batches = math.ceil(total_unknowns / BATCH_SIZE)
+        
+        logger.info(f"Analyzing {total_unknowns} unique unknown items in {total_batches} batches...")
+
+        for i in range(0, total_unknowns, BATCH_SIZE):
+            # Slice the batch
+            current_batch = unique_unknowns[i : i + BATCH_SIZE]
+            batch_num = (i // BATCH_SIZE) + 1
+            
+            logger.info(f"Processing Batch {batch_num}/{total_batches} ({len(current_batch)} items)...")
+            
+            # Call API
+            batch_result = fetch_gemini_normalization(current_batch)
+            
+            # Update the main map
+            if batch_result:
+                ai_generated_map.update(batch_result)
+                logger.info(f"Batch {batch_num} success. Mapped {len(batch_result)} items.")
+            else:
+                logger.warning(f"Batch {batch_num} failed or returned empty.")
+            
+            # Sleep to respect Rate Limit (RPM)
+            time.sleep(5)
+
+        logger.info(f"Gemini successfully mapped a total of {len(ai_generated_map)} items.")
     else:
-        print("All items matched locally. No API call needed.")
+        logger.info("All items matched locally. No API call needed.")
 
     # ==========================================
     # 4. Merge & Update
@@ -226,7 +291,7 @@ def process_ingredients_pipeline(dt:pd.DataFrame, ref_path:Path):
         print("Database remains unchanged.")
 
     # Save to disk
-    output_norm_ingred_name_file = ROOT_DIR / f"data/db_ingredients/icook_recipe_{MANUAL_DATE}_recipe_ingredients_name_norm.csv"
+    output_norm_ingred_name_file = ROOT_DIR / f"data/db_ingredients/all_ingredient_names_cleaned_ytower_{MANUAL_DATE}.csv"
     output_ref_file = REFERNCE_FILE_PATH
     
     df_sample.to_csv(output_norm_ingred_name_file, index=False, encoding='utf-8-sig')

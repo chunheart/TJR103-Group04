@@ -89,8 +89,7 @@ def load_unit_normalization():
 
     except sql.MySQLError:
         LOGGER.error(f"Connection failed,{e}")
-
-
+        
 
 if __name__ == "__main__":
     load_unit_normalization()

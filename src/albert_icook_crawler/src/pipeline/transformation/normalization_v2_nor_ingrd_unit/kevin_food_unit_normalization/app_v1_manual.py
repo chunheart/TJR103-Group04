@@ -26,7 +26,7 @@ if not API_KEY:
 MODEL_NAME = "gemini-2.0-flash" 
 
 TZ = ZoneInfo("Asia/Taipei")
-MANUAL_DATE = "2025-11-12" 
+MANUAL_DATE = "2025-11-28" 
 
 MAPPING_DB_FILE = ROOT_DIR / "data" / "db_unit_normalization" / "unit_normalization_db.csv"
 

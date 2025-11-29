@@ -224,7 +224,14 @@ def fetch_gemini_response(prompt: str) -> Dict:
     """
     logger.info("[Status] Calling Gemini API...")
     try:
-        response = model.generate_content(prompt)
+        response = model.generate_content(
+            prompt,
+            generation_config=genai.types.GenerationConfig(
+                max_output_tokens=10000,
+                temperature=0.5,
+                response_mime_type="application/json",
+            )
+        )
         cleaned_text = response.text.replace("```json", "").replace("```", "").strip()
         result = json.loads(cleaned_text)
         logger.info("[Status] Response parsed successfully.")

@@ -14,7 +14,6 @@ LOG_FILE_DIR = LOG_ROOT_DIR / "logs" / f"logs={datetime.today().date()}"
 LOG_FILE_DIR.mkdir(parents=True, exist_ok=True)
 LOG_FILE_PATH = LOG_FILE_DIR /  f"{FILENAME}_{datetime.today().date()}.log"
 
-DATABASE = "mydatabase"
 COLLECTION = "recipes"
 
 DATA_ROOT_DIR = Path(__file__).resolve().parents[4] # Root dir : /opt/airflow/src/albert_icook_crawler
@@ -92,7 +91,6 @@ def get_recipe_info():
         # Remove duplication
         logger.info("Removing duplicates...")
         duplicates_removal_df = recipe_df.drop_duplicates(subset="recept_id", keep="last", ignore_index=True)
-        duplicates_removal_df.info()
         logger.info("Removing duplicates completed")
 
         ### Transform
@@ -102,7 +100,6 @@ def get_recipe_info():
         # Convert number into integer type
         duplicates_removal_df["people"] = duplicates_removal_df["people"].apply(ppl.get_recipe_ppl_num)
         logger.info("Processed fillna for column, people with 1人份 ...")
-        duplicates_removal_df.info()
 
         ### Save Data into CSV file
         logger.info(f"Saving data to the path: {SAVED_FILE_PATH}")

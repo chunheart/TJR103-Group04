@@ -91,7 +91,6 @@ def get_recipe_info():
         # Remove duplication
         logger.info("Removing duplicates...")
         duplicates_removal_df = recipe_df.drop_duplicates(subset="recept_id", keep="last", ignore_index=True)
-        duplicates_removal_df.info()
         logger.info("Removing duplicates completed")
 
         ### Transform
@@ -101,7 +100,6 @@ def get_recipe_info():
         # Convert number into integer type
         duplicates_removal_df["people"] = duplicates_removal_df["people"].apply(ppl.get_recipe_ppl_num)
         logger.info("Processed fillna for column, people with 1人份 ...")
-        duplicates_removal_df.info()
 
         ### Save Data into CSV file
         logger.info(f"Saving data to the path: {SAVED_FILE_PATH}")
