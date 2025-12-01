@@ -29,16 +29,25 @@ DATA_ROOT_DIR = Path(__file__).resolve().parents[4] # Root dir : /opt/airflow/sr
 CSV_FILE_DIR = DATA_ROOT_DIR / "data" / "archive"
 CSV_FILE_DIR.mkdir(parents=True, exist_ok=True)
 MANUAL_DATE = "2025-10-23"
-CATEGORY = "recipe"
-CATEGORY_NUMBER = "58"
+CATEGORY = "video"
+CATEGORY_NUMBER = "583"
 COLLECTION = "recipe_ingredients"
 CSV_FILE_PATH = CSV_FILE_DIR / f"icook_{CATEGORY}_{CATEGORY_NUMBER}_{MANUAL_DATE}.csv"
-# icook_recipe_baby_404_2025-10-24
+# icook_baby_404_2025-10-24
 # icook_chinese_349_2025-10-24
 # icook_snack_57_2025-10-23
 # icook_saving_money_437_2025-10-23
 # icook_recipe_58_2025-10-23
-
+# icook_cookers_59_2025-10-23
+# icook_effect_352_2025-10-23
+# icook_pets_606_2025-10-23
+# icook_fantasy_19_2025-10-23
+# icook_festival_31_2025-10-23
+# icook_general_684_2025-10-23
+# icook_general_ingds_608_2025-10-23
+# icook_jam_460_2025-10-23
+# icook_vegetable_28_2025-10-23
+# icook_video_583_2025-10-23
 ### SAVE FILE ###
 SAVED_FILE_DIR = DATA_ROOT_DIR / "data" / "db_ingredients"
 SAVED_FILE_DIR.mkdir(parents=True, exist_ok=True)
@@ -50,7 +59,7 @@ TZ = ZoneInfo("Asia/Taipei")
 API_KEY = os.getenv("API_KEY")
 genai.configure(api_key=API_KEY)
 model = genai.GenerativeModel('gemini-2.5-flash')
-BATCH_SIZE = 30
+BATCH_SIZE = 200
 
 logger = get_logger(log_file_path=LOG_FILE_PATH, logger_name=FILENAME)
 
@@ -241,7 +250,7 @@ def fetch_gemini_response(prompt: str) -> Dict:
         response = model.generate_content(
             prompt,
             generation_config=genai.types.GenerationConfig(
-                max_output_tokens=10000,
+                max_output_tokens=65536,
                 temperature=0.5,
                 response_mime_type="application/json",
             )
@@ -356,13 +365,13 @@ def get_ingredients_info():
         ### Separate the quantity to get the number part and the unit part dependently
         # Get unit
         logger.info("Retrieving unit only from quantity ...")
-        ingredient_df_explode["unit_name"] = ingredient_df_explode["quantity"].apply(unit)
+        ingredient_df_explode["unit_name"] = ingredient_df_explode["quantity"].astype(str).apply(unit)
         ingredient_df_explode["unit_name"] = ingredient_df_explode["unit_name"].apply(unit_convertion)
         logger.info("Retrieved unit only from quantity")
 
         # Get num
         logger.info("Retrieving number only from quantity ...")
-        ingredient_df_explode["unit_number"] = ingredient_df_explode["quantity"].apply(num)
+        ingredient_df_explode["unit_number"] = ingredient_df_explode["quantity"].astype(str).apply(num)
         logger.info("Retrieved number only from quantity ...")
 
         criteria = ["適量", "少許", "依喜好"]
@@ -380,7 +389,7 @@ def get_ingredients_info():
             start_time = time.perf_counter()
 
             ### Set batches ###
-            batch_size = BATCH_SIZE # Process 100 rows per request to avoid output token limits
+            batch_size = BATCH_SIZE # Process 200 rows per request to avoid output token limits
             all_predictions = {} # Dictionary to collect results from all batches
             
             total_rows = len(df_to_process) # batch loop

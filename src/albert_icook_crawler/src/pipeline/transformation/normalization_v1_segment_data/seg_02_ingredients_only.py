@@ -342,22 +342,22 @@ def get_ingredients_info():
         ### Separate the quantity to get the number part and the unit part dependently
         # Get unit
         logger.info("Retrieving unit only from quantity ...")
-        ingredient_df_explode["unit_name"] = ingredient_df_explode["quantity"].apply(unit)
+        ingredient_df["unit_name"] = ingredient_df["quantity"].astype(str).apply(unit)
         logger.info("Retrieved unit only from quantity")
 
-        ingredient_df_explode["unit_name"] = ingredient_df_explode["unit_name"].apply(unit_convertion)
+        ingredient_df["unit_name"] = ingredient_df["unit_name"].apply(unit_convertion)
 
         # Get num
-        ingredient_df_explode["unit_number"] = ingredient_df_explode["quantity"].apply(num)
+        ingredient_df["unit_number"] = ingredient_df["quantity"].astype(str).apply(num)
 
 
         criteria = ["適量", "少許", "依喜好"]
-        ingredient_df_explode.loc[ingredient_df_explode["unit_name"].isin(criteria), "unit_number"] = float(1)
+        ingredient_df.loc[ingredient_df["unit_name"].isin(criteria), "unit_number"] = float(1)
 
         ### Starting LLM out of Gemini 2.5 flash
 
         # 1.Filter rows (Auto-fill metric units first, return rest for LLM)
-        df = ingredient_df_explode.reset_index(drop=True)
+        df = ingredient_df.reset_index(drop=True)
         df_to_process = get_rows_needing_processing(df)
 
         df_final = pd.DataFrame()
@@ -376,7 +376,7 @@ def get_ingredients_info():
 
         else:
             logger.info("[Result] No rows required LLM inference. All data is clean or auto-filled.")
-            df_final = ingredient_df_explode
+            df_final = ingredient_df
         ### Processing LLM out of Gemini 2.5 flash
 
         df_final["unit_number"] = df_final["unit_number"].apply(lambda x: float(x)) 

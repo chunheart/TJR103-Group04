@@ -18,7 +18,7 @@ LOGGER = get_logger(LOG_FILE_PATH, FILENAME)
 
 ### MySQL ###
 TABLE_NAME = "recipe"
-MANUAL_DATE = "2025-11-27"
+MANUAL_DATE = "2025-11-29"
 
 ### CSV ###
 CSV_FILE_PATH = ROOT_DIR / "data" / "db_recipe" / f"icook_recipe_{MANUAL_DATE}_recipes.csv"

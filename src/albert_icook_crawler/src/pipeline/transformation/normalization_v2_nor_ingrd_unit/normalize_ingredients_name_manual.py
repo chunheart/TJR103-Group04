@@ -2,7 +2,7 @@ import math
 import json
 import google.generativeai as genai
 import pandas as pd
-import os
+import os, sys
 import time
 import re
 import albert_icook_crawler.src.utils.mongodb_connection as mondb
@@ -25,10 +25,12 @@ LOG_FILE_DIR = ROOT_DIR / "src" / "logs" / f"logs={datetime.today().date()}"
 LOG_FILE_DIR.mkdir(parents=True, exist_ok=True)
 LOG_FILE_PATH = LOG_FILE_DIR /  f"{FILENAME}_{datetime.today().date()}.log"
 
-MANUAL_DATE = "2025-11-12"
+CATEGORY = "video"
+CATE_NUM = "583"
+MANUAL_DATE = "2025-10-23"
 
-# CSV_FILE_PATH = ROOT_DIR / "data" / "db_ingredients" / f"icook_recipe_{MANUAL_DATE}_recipe_ingredients.csv"
-CSV_FILE_PATH = "/opt/airflow/src/albert_icook_crawler/data/yotower_ori_ingredient/all_ingredient_names_cleaned_ytower.csv"
+CSV_FILE_PATH = ROOT_DIR / "data" / "db_ingredients" / f"icook_recipe_{CATEGORY}_{CATE_NUM}_{MANUAL_DATE}_recipe_ingredients.csv"
+
 COLLECTION = "ingredient_normalize"
 
 DATA_ROOT_DIR = Path(__file__).resolve().parents[4]
@@ -38,12 +40,12 @@ REFERNCE_FILE_PATH =  REFERNCE_FILE_DIR / "icook_recipe_ingredient_normalize.csv
 
 logger = get_logger(log_file_path=LOG_FILE_PATH, logger_name=FILENAME)
 
-def remove_parentheses(s:str) -> str:
+def remove_parentheses(s) -> str:
     if_parentheses = r"[(){}\"\[\]（）]"
     pattern = r"\((.*?)\)|\[(.*?)\]|\{(.*?)\}|\"(.*?)\"|（(.*?)）"
     if re.search(if_parentheses, s):
         return re.sub(pattern, "", s)
-    return s
+    return str(s)
 
 def fetch_gemini_normalization(unknown_ingredients):
     """
@@ -69,7 +71,7 @@ def fetch_gemini_normalization(unknown_ingredients):
         "temperature": 0.8,
         "top_p": 0.95,
         "top_k": 64,
-        "max_output_tokens": 8192,
+        "max_output_tokens": 65536,
         "response_mime_type": "application/json",
     }
 
@@ -143,7 +145,44 @@ def fetch_gemini_normalization(unknown_ingredients):
 
     except Exception as e:
         logger.error(f" Gemini API Error: {e}")
-        return {}
+        return e
+
+def append_to_reference_csv(batch_map: dict, csv_path: Path):
+    """
+    [New Function] Incremental CSV Append.
+    
+    Appends a batch of normalized results directly to the end of the reference CSV file.
+    This acts as a checkpoint to save progress immediately after a successful API batch.
+
+    Args:
+        batch_map (dict): A dictionary mapping { "raw_name": "normalized_name" }.
+        csv_path (Path): The file path to the reference CSV.
+    """
+    if not batch_map:
+        return
+
+    new_entries = []
+    current_time = datetime.now(tz=ZoneInfo("Asia/Taipei")).strftime("%Y-%m-%d %H:%M:%S")
+
+    for ori, norm in batch_map.items():
+        new_entries.append({
+            'ori_ingredient_name': ori,
+            'nor_ingredient_name': norm,
+            'ins_timestamp': current_time,
+            'upd_timestamp': current_time,
+            'status': 'done'
+        })
+    
+    if new_entries:
+        df_new = pd.DataFrame(new_entries)
+        
+        try:
+            # mode='a': Open file in append mode.
+            # header=False: Do not write column names (headers) again since the file already exists.
+            df_new.to_csv(csv_path, mode='a', header=False, index=False, encoding='utf-8-sig')
+            logger.info(f" -> Checkpoint: Successfully appended {len(new_entries)} items to Reference CSV.")
+        except Exception as e:
+            logger.error(f" -> Checkpoint Error: Failed to append to CSV. Reason: {e}")
 
 def process_ingredients_pipeline(dt:pd.DataFrame, ref_path:Path):
     """
@@ -208,7 +247,7 @@ def process_ingredients_pipeline(dt:pd.DataFrame, ref_path:Path):
 
     if unique_unknowns:
         total_unknowns = len(unique_unknowns)
-        BATCH_SIZE = 30 # Process 30 ingredients at a time
+        BATCH_SIZE = 100 # Process 100 ingredients at a time
         total_batches = math.ceil(total_unknowns / BATCH_SIZE)
         
         logger.info(f"Analyzing {total_unknowns} unique unknown items in {total_batches} batches...")
@@ -220,13 +259,30 @@ def process_ingredients_pipeline(dt:pd.DataFrame, ref_path:Path):
             
             logger.info(f"Processing Batch {batch_num}/{total_batches} ({len(current_batch)} items)...")
             
-            # Call API
-            batch_result = fetch_gemini_normalization(current_batch)
+            ### Retry system starts ###
+            max_retries = 2
+            batch_result = None
+            for attempt in range(max_retries):
+                try:
+                    # Call API
+                    batch_result = fetch_gemini_normalization(current_batch)
+                    break # If succeeding, will stop this retry loop
+                
+                except Exception as e:
+                    logger.warning(f"Batch {batch_num} failed (Attempt {attempt+1}/{max_retries}). Error: {e}")
+                    if attempt < max_retries - 1:
+                        time.sleep(10) 
+                    else:
+                        # If error times reach to max retries, this program will cease accordingly
+                        logger.critical("Max retries reached. Stopping pipeline to prevent data corruption.")
+                        sys.exit(1)
+            ### Retry system ends ###
             
             # Update the main map
             if batch_result:
                 ai_generated_map.update(batch_result)
-                logger.info(f"Batch {batch_num} success. Mapped {len(batch_result)} items.")
+                append_to_reference_csv(batch_result, ref_path)
+                logger.info(f"Batch {batch_num} success. Mapped & Saved {len(batch_result)} items.")
             else:
                 logger.warning(f"Batch {batch_num} failed or returned empty.")
             
@@ -241,8 +297,6 @@ def process_ingredients_pipeline(dt:pd.DataFrame, ref_path:Path):
     # 4. Merge & Update
     # ==========================================
     final_normalized_column = []
-    new_db_entries = []
-    current_time = datetime.now(tz=ZoneInfo("Asia/Taipei")).strftime("%Y-%m-%d %H:%M:%S")
     
     for item in processing_queue:
         norm_name = None
@@ -259,21 +313,21 @@ def process_ingredients_pipeline(dt:pd.DataFrame, ref_path:Path):
 
         final_normalized_column.append(norm_name)
 
-        # DB Update Logic:
-        # Only add if we have a valid name AND the Raw Original (ori) is not in local map
-        if norm_name and item['ori'] and item['ori'] not in local_map:
-            # Prevent duplicates in the current batch
-            is_duplicate_in_batch = any(d['ori_ingredient_name'] == item['ori'] for d in new_db_entries)
+        # # DB Update Logic:
+        # # Only add if we have a valid name AND the Raw Original (ori) is not in local map
+        # if norm_name and item['ori'] and item['ori'] not in local_map:
+        #     # Prevent duplicates in the current batch
+        #     is_duplicate_in_batch = any(d['ori_ingredient_name'] == item['ori'] for d in new_db_entries)
             
-            if not is_duplicate_in_batch:
-                new_entry = {
-                    'ori_ingredient_name': item['ori'], # Raw data
-                    'nor_ingredient_name': norm_name,   # Normalized data
-                    'ins_timestamp': current_time,
-                    'upd_timestamp': current_time,
-                    'status': 'processed'
-                }
-                new_db_entries.append(new_entry)
+        #     if not is_duplicate_in_batch:
+        #         new_entry = {
+        #             'ori_ingredient_name': item['ori'], # Raw data
+        #             'nor_ingredient_name': norm_name,   # Normalized data
+        #             'ins_timestamp': current_time,
+        #             'upd_timestamp': current_time,
+        #             'status': 'processed'
+        #         }
+        #         new_db_entries.append(new_entry)
 
     # ==========================================
     # 5. Save Results
@@ -281,25 +335,25 @@ def process_ingredients_pipeline(dt:pd.DataFrame, ref_path:Path):
     # Update Sample File
     df_sample['normalized_name'] = final_normalized_column
     
-    # Update Reference DB
-    if new_db_entries:
-        df_new = pd.DataFrame(new_db_entries)
-        df_ref_updated = pd.concat([df_ref, df_new], ignore_index=True)
-        print(f"Added {len(new_db_entries)} new rules to the database.")
-    else:
-        df_ref_updated = df_ref
-        print("Database remains unchanged.")
+    # # Update Reference DB
+    # if new_db_entries:
+    #     df_new = pd.DataFrame(new_db_entries)
+    #     df_ref_updated = pd.concat([df_ref, df_new], ignore_index=True)
+    #     print(f"Added {len(new_db_entries)} new rules to the database.")
+    # else:
+    #     df_ref_updated = df_ref
+    #     print("Database remains unchanged.")
 
     # Save to disk
-    output_norm_ingred_name_file = ROOT_DIR / f"data/db_ingredients/all_ingredient_names_cleaned_ytower_{MANUAL_DATE}.csv"
-    output_ref_file = REFERNCE_FILE_PATH
+    output_norm_ingred_name_file = ROOT_DIR / "data" / "db_ingredients" / f"icook_recipe_{CATEGORY}_{CATE_NUM}_{MANUAL_DATE}_recipe_ingredients_name_norm.csv"
+    # output_ref_file = REFERNCE_FILE_PATH
     
     df_sample.to_csv(output_norm_ingred_name_file, index=False, encoding='utf-8-sig')
-    df_ref_updated.to_csv(output_ref_file, index=False, encoding='utf-8-sig')
+    # df_ref_updated.to_csv(output_ref_file, index=False, encoding='utf-8-sig')
     
     logger.info("Processing Complete!")
-    logger.info(f"1. Normalized Sample: {output_norm_ingred_name_file}")
-    logger.info(f"2. Updated Ref Database:  {output_ref_file}")
+    logger.info(f"1. Processed file: {output_norm_ingred_name_file}")
+    # logger.info(f"2. Updated Ref Database:  {output_ref_file}")
 
 
 def normalize_ingrd_name():
@@ -315,9 +369,6 @@ def normalize_ingrd_name():
     
     ### Algorithm:
     - establish logging V
-    - MySQL connection V
-    - db collection V
-    - collection connection V
     - find today's icook recipe CSV file V
     - convert it into pandas dataframe V
     - select determined field V
@@ -342,21 +393,9 @@ def normalize_ingrd_name():
         # Filter field, ingredients
         ingredient_norm_df = raw_df[mask]
 
-        # Add int_time, upd_time, status
-        logger.info(f"Adding field \"int_time\", \"upd_time\", \"status\" ...")
-
-        int_time, upd_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S"), datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        status = "pending"
-        ingredient_norm_df["ins_timestamp"] = int_time
-        ingredient_norm_df["upd_timestamp"] = upd_time
-        ingredient_norm_df["status"] = status
-        
-        logger.info(f"Added field \"int_time\", \"upd_time\", \"status\" ...")
-
         # Remove parentheses of values of field ingredients
         logger.info(f"Removing parenthese")
-        ingredient_norm_df["t_ingredient_name"] = ingredient_norm_df["ingredients"].apply(remove_parentheses)
-        ingredient_norm_df.info()
+        ingredient_norm_df["t_ingredient_name"] = ingredient_norm_df["ingredients"].fillna("").astype(str).apply(remove_parentheses)
         logger.info(f"Removed parenthese")
         
 

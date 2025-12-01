@@ -16,7 +16,6 @@ LOG_FILE_PATH = LOG_FILE_DIR /  f"{FILENAME}_{datetime.today().date()}.log"
 LOGGER = get_logger(LOG_FILE_PATH, FILENAME)
 
 ### MySQL ###
-# DB_NAME = "TJR103"
 TABLE_NAME = "recipe"
 
 ### CSV ###

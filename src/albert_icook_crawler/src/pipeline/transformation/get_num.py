@@ -255,7 +255,7 @@ def match_num_with_chinese_range(matches) -> float | Decimal | str | None:
     return None
 
 if __name__ == '__main__':
-    text = "一半(兩個)"
+    text = "三四支"
     ans = get_num_field_quantity(text)
     print(ans)
     print(type(ans))
