@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<title>餵食碳排小幫手</title>
+
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700&display=swap" rel="stylesheet">
+
+<style>
+/* ===== 全域設定 ===== */
+body {
+    font-family: "Noto Sans TC", sans-serif;
+    background: #e8f4f3;
+    margin: 0;
+    padding: 0;
+    position: relative;
+
+    /* 🌥️ 淡淡的雲朵背景圖（不干擾內容） */
+    background-image: url('https://raw.githubusercontent.com/chunheart/assets/main/cloud_bg_soft.png');
+    background-size: 450px;
+    background-repeat: repeat;
+    background-attachment: fixed;
+    opacity: 0.97;
+}
+
+/* NAV 導覽列 */
+.navbar {
+    display: flex;
+    background: #0fa3a1;
+    color: white;
+    padding: 14px 20px;
+    gap: 20px;
+    font-size: 18px;
+}
+.navItem {
+    cursor: pointer;
+    padding: 6px 12px;
+    border-radius: 6px;
+    transition: 0.2s;
+}
+.navItem:hover {
+    background: rgba(255,255,255,0.35);
+}
+.activeTab {
+    background: rgba(255,255,255,0.45);
+}
+
+/* 區塊容器 */
+.page {
+    display: none;
+    max-width: 1100px;
+    margin: auto;
+    padding: 30px;
+}
+
+/* 卡片區塊（更可愛） */
+.section {
+    background: white;
+    padding: 25px;
+    border-radius: 16px;
+    margin-top: 20px;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.12);
+    animation: fadeUp 0.6s ease;
+}
+
+/* 表格 */
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 15px;
+    border-radius: 12px;
+    overflow: hidden;
+}
+th, td {
+    padding: 12px;
+    border-bottom: 1px solid #eee;
+    text-align: center;
+}
+th {
+    background: #f1faf8;
+    font-weight: 700;
+}
+
+/* 淡入動畫 */
+@keyframes fadeUp {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+/* 食譜封面圖 + spinner */
+.previewImgMain {
+    width: 180px;
+    height: 140px;
+    border-radius: 12px;
+    object-fit: cover;
+    opacity: 0;
+    transition: opacity 0.6s ease-in-out;
+    position: relative;
+}
+
+.spinner {
+    border: 4px solid rgba(255,255,255,0.3);
+    border-top: 4px solid #0fa3a1;
+    border-radius: 50%;
+    width: 36px;
+    height: 36px;
+    animation: spin 1s linear infinite;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+}
+
+@keyframes spin {
+    0% { transform: translate(-50%, -50%) rotate(0deg); }
+    100% { transform: translate(-50%, -50%) rotate(360deg); }
+}
+
+/* ===== ICON A–E 可愛跳動動畫 ===== */
+.icon-bounce {
+    animation: bounce 1.8s infinite ease-in-out;
+}
+@keyframes bounce {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-6px); }
+}
+
+/* ===== 🌍 小地球小助手 ===== */
+.helper-wrap {
+    position: fixed;
+    right: 26px;
+    bottom: 26px;
+    z-index: 9999;
+    cursor: pointer;
+}
+
+.helper-img {
+    width: 90px;
+    height: 90px;
+    animation: sway 2.4s infinite ease-in-out;
+}
+
+/* 左右搖擺動畫 */
+@keyframes sway {
+    0%   { transform: rotate(-4deg); }
+    50%  { transform: rotate(4deg); }
+    100% { transform: rotate(-4deg); }
+}
+
+/* 提示泡泡（小助手頭上方） */
+.helper-bubble {
+    position: absolute;
+    right: 80px;
+    bottom: 70px;
+    background: white;
+    padding: 12px 18px;
+    border-radius: 12px;
+    font-size: 16px;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.15);
+    display: none;
+    animation: fadeUp 0.3s ease;
+}
+</style>
+</head>
+
+<body>
+
+<!-- 導覽列 -->
+<div class="navbar">
+    <div class="navItem activeTab" onclick="showPage(event,'recipe')">🥗 餵食碳排小幫手</div>
+    <div class="navItem" onclick="showPage(event,'about')">ℹ️ 關於餵食碳排小幫手</div>
+</div>
+
+<!-- 🎀 小地球小助手（右下角漂浮） -->
+<div class="helper-wrap" onclick="toggleBubble()">
+    <img src="earth_helper.png" class="helper-img">
+    <div id="helperBubble" class="helper-bubble">請餵食 🍽️</div>
+</div>
+
+<script>
+function toggleBubble() {
+    let b = document.getElementById("helperBubble");
+    b.style.display = (b.style.display === "block") ? "none" : "block";
+}
+</script>
+<!-- ======================== 食譜碳排分析頁 ======================== -->
+<div id="page_recipe" class="page" style="display:block;">
+
+    <!-- 匯入區塊 -->
+    <div class="section">
+        <h2>📥 匯入 CSV（可多份）</h2>
+        <input type="file" id="csvFile" accept=".csv" multiple>
+        <br><br>
+
+        <button onclick="loadCSV()" 
+            style="padding:12px 24px;border:none;border-radius:12px;
+                   background:#0fa3a1;color:white;font-size:16px;cursor:pointer;
+                   box-shadow:0 3px 8px rgba(0,0,0,0.15);">
+            讀取全部 CSV
+        </button>
+    </div>
+
+    <!-- 主要內容 -->
+    <div id="mainContent" style="display:none;">
+
+        <!-- 食譜標題區 -->
+        <div class="section" style="display:flex;gap:20px;align-items:flex-start;">
+            
+            <!-- 封面圖片 -->
+            <div style="position:relative;width:180px;height:140px;">
+                <div id="imgSpinner" class="spinner" style="display:none;"></div>
+                <img id="recipeImage"
+                    class="previewImgMain"
+                    src="https://images.unsplash.com/photo-1504674900247-0877df9cc836"
+                    onerror="this.src='https://images.unsplash.com/photo-1504674900247-0877df9cc836'">
+            </div>
+
+            <!-- 標題 & 作者 -->
+            <div>
+                <div style="font-size:30px;font-weight:700;color:#145f5a;"
+                     id="recipeTitle">食譜名稱</div>
+
+                <div id="recipeAuthor"
+                     style="color:#888;font-size:18px;margin-top:6px;">作者</div>
+
+                <!-- 來源網址 -->
+                <div id="recipeSource" style="margin-top:18px;"></div>
+            </div>
+        </div>
+
+        <!-- 搜尋 + 下拉 -->
+        <div class="section">
+            <h3>📑 選擇食譜</h3>
+
+            <input type="text" id="searchInput" placeholder="搜尋食譜..."
+                style="width:100%;padding:12px;border-radius:10px;border:1px solid #bbb;
+                       margin-bottom:15px;font-size:16px;"
+                oninput="filterRecipes()">
+
+            <select id="recipeSelect" onchange="renderRecipe()"
+                style="width:100%;padding:12px;border-radius:10px;font-size:16px;border:1px solid #bbb;">
+            </select>
+        </div>
+
+        <!-- 主內容：食材 & 碳排資訊 -->
+        <div class="section" style="display:flex;gap:30px;">
+
+            <!-- 食材表格 -->
+            <div style="flex:1;">
+                <h3>🥗 食材列表</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>食材</th>
+                            <th>原始量</th>
+                            <th>食材換算總重量(g)</th>
+                            <th>CO2e(g)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="ingredientTable"></tbody>
+                </table>
+            </div>
+
+            <!-- 碳排資訊 -->
+            <div style="flex:0.8;">
+                <h3>🌍 碳排放分析</h3>
+
+                <div style="margin-top:20px;font-size:20px;">
+                    整份： <b id="totalCO2e" style="color:#0b685d;">0 g</b>
+                </div>
+
+                <div id="carbonIntensityBox" style="margin-top:20px;"></div>
+            </div>
+        </div>
+
+    </div>
+</div>
+<!-- ======================== 關於本工具頁 ======================== -->
+<div id="page_about" class="page">
+
+    <!-- 工具介紹 -->
+    <div class="section">
+        <h2 style="color:#0b675c;">📘 關於餵食碳排小幫手</h2>
+
+        <p style="font-size:17px;line-height:1.7;">
+            歡迎來到 <b>餵食碳排小幫手</b>！  
+            這裡不是嚴肅的研究室，而是讓你「餵食」食譜、看看你的料理對地球有多溫柔的小遊樂場 🌍🍴  
+            只要匯入食譜，我們就會用簡單的方式粗估整份料理產生的碳排量，  
+            看看它是「地球的好朋友」，還是「偷偷放了一點小壞壞的碳排」😆
+        </p>
+
+        <p style="margin-top:12px;color:#666;font-size:15px;">
+            ※ 本工具為概略估計，數據僅供參考，不代表絕對數值。
+        </p>
+    </div>
+
+    <!-- 圖片載入說明 -->
+    <div class="section">
+        <h3>🖼️ 圖片載入說明</h3>
+        <p style="line-height:1.7;font-size:16px;">
+            若食譜封面無法正常顯示，可能原因如下：
+        </p>
+
+        <ul style="font-size:16px;line-height:1.8;">
+            <li>🌐 來源網站可能不允許外部截圖服務</li>
+            <li>🍽️ 食譜本身沒有封面圖片</li>
+            <li>📶 網路連線問題或載入超時</li>
+        </ul>
+    </div>
+
+    <!-- 碳排等級說明 -->
+    <div class="section">
+        <h3>🌡️ 碳排等級說明</h3>
+
+        <ul style="font-size:16px;line-height:1.9;">
+            <li>A（Very Low）🌱：低於 0.40 kg CO2e</li>
+            <li>B（Low）💚：0.40～0.89 kg CO2e</li>
+            <li>C（Medium）🍃：0.90～1.79 kg CO2e</li>
+            <li>D（High）🔥：1.80～2.59 kg CO2e</li>
+            <li>E（Very High）💥：高於 2.60 kg CO2e</li>
+        </ul>
+    </div>
+
+    <!-- 樹木換算 -->
+    <div class="section">
+        <h3>🌲 樹木吸收換算</h3>
+        <p style="line-height:1.8;font-size:16px;">
+            一棵成熟大樹一年約吸收 <b>12 kg</b> 的 CO2。<br>
+            換算成每日則約為 <b>0.0329 kg</b>。
+        </p>
+
+        <p style="margin-top:10px;font-size:16px;">
+            🌱 換算公式：  
+            <b>需要樹木棵數 = 食譜 CO2e（kg） ÷ 0.0329</b>
+        </p>
+    </div>
+
+    <!-- 車輛換算 -->
+    <div class="section">
+        <h3>🚗 汽車排放換算</h3>
+
+        <p style="line-height:1.8;font-size:16px;">
+            一般汽車每行駛 1 公里約排放 <b>0.244 kg CO2e</b>。
+        </p>
+
+        <p style="margin-top:10px;font-size:16px;">
+            🚘 換算公式：  
+            <b>等效開車距離（公里） = 食譜 CO2e（kg） ÷ 0.244</b>
+        </p>
+    </div>
+
+    <!-- 食材換算方式 -->
+    <div class="section">
+        <h3>🥕 食材單位換算方式</h3>
+
+        <p style="font-size:16px;line-height:1.8;">
+            食譜 CSV 會提供：
+        </p>
+
+        <ul style="font-size:16px;line-height:1.8;">
+            <li><b>unit_value</b>：數量（如 2 杯、3 湯匙）</li>
+            <li><b>weight_grams</b>：每單位對應的重量（g）</li>
+        </ul>
+
+        <p style="margin-top:10px;font-size:16px;">
+            🍽️ 換算公式：  
+            <b>總重量（g）＝ unit_value × weight_grams</b>
+        </p>
+
+        <p style="margin-top:10px;font-size:16px;">
+            例如：  
+            <b>3 杯 × 120 g = 360 g</b>
+        </p>
+    </div>
+
+</div>
+<script>
+/* ===========================================================
+   ✨ SPA 頁面切換（與導覽列連動）
+=========================================================== */
+function showPage(evt, page) {
+    // 隱藏所有頁面
+    document.querySelectorAll(".page").forEach(p => p.style.display = "none");
+
+    // 顯示指定頁面
+    document.getElementById("page_" + page).style.display = "block";
+
+    // 切換導覽列樣式
+    document.querySelectorAll(".navItem").forEach(
+        n => n.classList.remove("activeTab")
+    );
+    evt.target.classList.add("activeTab");
+}
+
+/* ===========================================================
+   ✨ CSV 解析邏輯
+   ※ 與你 MySQL 正規化後的輸出欄位完全相容
+=========================================================== */
+let allRows = [];
+let groupedByID = {};
+
+function loadCSV() {
+    let files = document.getElementById("csvFile").files;
+    if (files.length === 0) return alert("請選擇 CSV 檔案");
+
+    allRows = [];
+    let done = 0;
+
+    Array.from(files).forEach(f => {
+        let reader = new FileReader();
+
+        reader.onload = e => {
+            parseCSV(e.target.result);
+            done++;
+
+            // 全部讀完後才建構資料
+            if (done === files.length) {
+                groupByRecipe();
+                buildRecipeSelect();
+                document.getElementById("mainContent").style.display = "block";
+            }
+        };
+
+        reader.readAsText(f, "UTF-8");
+    });
+}
+
+/* ===========================================================
+   ✨ 將 CSV 轉成物件陣列
+=========================================================== */
+function parseCSV(text) {
+    let lines = text.split(/\r?\n/).filter(x => x.trim());
+    if (lines.length <= 1) return;
+
+    // 處理表頭
+    let header = lines[0].split(",").map(h => h.trim().replace("\ufeff", ""));
+
+    // 從第二行開始讀取資料
+    for (let i = 1; i < lines.length; i++) {
+        let cols = lines[i].split(",");
+        if (cols.length < header.length) continue;
+
+        let obj = {};
+        header.forEach((h, idx) => {
+            obj[h] = cols[idx] ? cols[idx].trim() : "";
+        });
+
+        // 數字欄位確保為 float
+        obj["ingre_total_coe"] = parseFloat(obj["ingre_total_coe"] || "0") || 0;
+
+        allRows.push(obj);
+    }
+}
+/**************************************************************
+ * ✨ 依 recipe_id 將食材分組
+ **************************************************************/
+function groupByRecipe() {
+    groupedByID = {};
+    allRows.forEach(r => {
+        let id = r["recipe_id"];
+        if (!groupedByID[id]) groupedByID[id] = [];
+        groupedByID[id].push(r);
+    });
+}
+
+/**************************************************************
+ * ✨ 產生下拉選單（食譜列表）
+ **************************************************************/
+function buildRecipeSelect() {
+    let sel = document.getElementById("recipeSelect");
+    sel.innerHTML = "";
+
+    Object.keys(groupedByID).forEach(id => {
+        let first = groupedByID[id][0];
+        sel.innerHTML += `
+            <option value="${id}">
+                ${first["recipe_name"]} — ${first["author"]}
+            </option>
+        `;
+    });
+
+    // 預設顯示第一個食譜
+    renderRecipe();
+}
+
+/**************************************************************
+ * ✨ 搜尋功能（依食譜名稱模糊匹配）
+ **************************************************************/
+function filterRecipes() {
+    let kw = document.getElementById("searchInput").value.trim();
+    let sel = document.getElementById("recipeSelect");
+
+    sel.innerHTML = "";
+
+    Object.keys(groupedByID).forEach(id => {
+        let title = groupedByID[id][0]["recipe_name"];
+        if (title.includes(kw)) {
+            sel.innerHTML += `<option value="${id}">${title}</option>`;
+        }
+    });
+
+    if (sel.options.length > 0) renderRecipe();
+}
+/**************************************************************
+ * ✨ iCook 封面縮圖產生（使用 Thum.io）
+ **************************************************************/
+const cache = {};
+
+function extractCoverImage(url) {
+    if (!url) return "";
+    if (cache[url]) return cache[url];
+
+    const apiUrl = `https://image.thum.io/get/width/600/${url}`;
+    cache[url] = apiUrl;
+    return apiUrl;
+}
+
+/**************************************************************
+ * ✨ 碳排等級分類（A～E）
+ **************************************************************/
+function carbonIntensityLevel(kg) {
+    if (kg < 0.40) return { level: "A", label: "Very Low", color: "#0f9d58" };
+    if (kg < 0.90) return { level: "B", label: "Low", color: "#34a853" };
+    if (kg < 1.80) return { level: "C", label: "Medium", color: "#fbbc05" };
+    if (kg < 2.60) return { level: "D", label: "High", color: "#ea4335" };
+    return { level: "E", label: "Very High", color: "#b80000" };
+}
+
+/**************************************************************
+ * ✨ 樹木換算（kg → 棵數）
+ **************************************************************/
+function treesNeededPerDay(kg) {
+    return kg / (12 / 365); // 1 棵樹每日吸收 0.0329 kg
+}
+
+/**************************************************************
+ * ✨ ICON 對照：A～E
+ **************************************************************/
+function earthIcon(level) {
+    return {
+        "A": "icon_A.png",
+        "B": "icon_B.png",
+        "C": "icon_C.png",
+        "D": "icon_D.png",
+        "E": "icon_E.png"
+    }[level];
+}
+
+/**************************************************************
+ * ✨ 渲染整份食譜
+ **************************************************************/
+function renderRecipe() {
+    let id = document.getElementById("recipeSelect").value;
+    let rows = groupedByID[id];
+    let recipe = rows[0];
+
+    /* =====================
+       標題區
+    ===================== */
+    document.getElementById("recipeTitle").innerText = recipe["recipe_name"];
+    document.getElementById("recipeAuthor").innerText = recipe["author"];
+
+    /* =====================
+       封面圖片處理
+    ===================== */
+    const fallbackImg = "https://images.unsplash.com/photo-1504674900247-0877df9cc836";
+    let cover = extractCoverImage(recipe["recipe_url"]) || fallbackImg;
+
+    const img = document.getElementById("recipeImage");
+    const spinner = document.getElementById("imgSpinner");
+
+    spinner.style.display = "block";
+    img.style.opacity = "0";
+    img.src = fallbackImg;
+
+    let tempImg = new Image();
+    let loaded = false;
+
+    tempImg.onload = () => {
+        loaded = true;
+        spinner.style.display = "none";
+        img.src = cover;
+        requestAnimationFrame(() => img.style.opacity = "1");
+    };
+
+    tempImg.onerror = () => {
+        spinner.style.display = "none";
+        img.src = fallbackImg;
+        img.style.opacity = "1";
+    };
+
+    setTimeout(() => {
+        if (!loaded) {
+            spinner.style.display = "none";
+            img.src = fallbackImg;
+            img.style.opacity = "1";
+        }
+    }, 5000);
+
+    tempImg.src = cover;
+
+    /* =====================
+       食譜來源網址
+    ===================== */
+    if (recipe["recipe_url"]) {
+        document.getElementById("recipeSource").innerHTML = `
+            <a href="${recipe["recipe_url"]}" target="_blank"
+                style="padding:8px 16px;background:#0fa3a1;color:white;
+                       border-radius:10px;text-decoration:none;font-size:15px;
+                       box-shadow:0 3px 8px rgba(0,0,0,0.15);">
+                來源網址
+            </a>
+        `;
+    } else {
+        document.getElementById("recipeSource").innerHTML = "";
+    }
+
+    /* =====================
+       食材表格
+    ===================== */
+    let tbody = document.getElementById("ingredientTable");
+    tbody.innerHTML = "";
+
+    let total = 0;
+
+    rows.forEach(r => {
+        let uv = parseFloat(r["unit_value"]);
+        let wg = parseFloat(r["weight_grams"]);
+
+        // 🔹 NULL → "-"
+        let totalWeight =
+            (!isNaN(uv) && !isNaN(wg))
+            ? (uv * wg).toFixed(2)
+            : "-";
+
+        let co2 = parseFloat(r["ingre_total_coe"]) || 0;
+        total += co2;
+
+        tbody.innerHTML += `
+            <tr>
+                <td>${r["ori_ingredient_name"]}</td>
+                <td>${r["unit_value"]} ${r["unit_name"]}</td>
+                <td>${totalWeight}</td>
+                <td>${co2.toFixed(2)}</td>
+            </tr>
+        `;
+    });
+
+    /* =====================
+       整份食譜總碳排
+    ===================== */
+    document.getElementById("totalCO2e").innerText =
+        total.toFixed(2) + " g CO2e";
+
+    let kg = total / 1000;
+    let ci = carbonIntensityLevel(kg);
+    let trees = treesNeededPerDay(kg);
+    let km = kg / 0.244;
+
+    let icon = earthIcon(ci.level);
+
+    /* =====================
+       碳排資訊顯示（可愛風格）
+    ===================== */
+    document.getElementById("carbonIntensityBox").innerHTML = `
+        <div style="
+            margin-top:15px;
+            padding:20px;
+            border-radius:14px;
+            background:${ci.color}15;
+            border-left:7px solid ${ci.color};
+            box-shadow:0 4px 12px rgba(0,0,0,0.12);
+        ">
+
+        <div style="display:flex;align-items:center;gap:14px;">
+            <img src="${icon}" class="icon-bounce" style="width:48px;height:48px;">
+            <div style="font-size:22px;font-weight:700;color:${ci.color}">
+                🌡️ Carbon Intensity：${ci.level}（${ci.label}）
+            </div>
+        </div>
+
+        <div style="font-size:18px;margin-top:14px;color:#333;">
+            整份排放：<b>${kg.toFixed(2)}</b> kg CO2e
+        </div>
+
+        <div style="font-size:18px;margin-top:10px;color:#2c3e50;">
+            🌲 需要 <b>${trees.toFixed(2)}</b> 棵樹（吸收一天）
+        </div>
+
+        <div style="font-size:18px;margin-top:10px;color:#444;">
+            🚗 相當於開車 <b>${km.toFixed(2)}</b> 公里
+        </div>
+    </div>
+    `;
+}
+</script>
+
+</body>
+</html>
