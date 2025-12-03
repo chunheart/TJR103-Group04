@@ -13,6 +13,8 @@ from google.genai import types
 from dotenv import load_dotenv
 from zoneinfo import ZoneInfo 
 
+from albert_icook_crawler.src.utils.get_logger import *
+
 # ================= CONFIGURATION =================
 # Suggestion: Use dynamic or relative paths for better portability
 ROOT_DIR = Path(__file__).resolve().parents[5] # Root directory structure assumption
@@ -24,12 +26,18 @@ API_KEY = os.getenv("API_KEY")
 if not API_KEY:
     raise ValueError("API_KEY not detected. Please check your .env path.")
 
-MODEL_NAME = "gemini-2.0-flash" 
+MODEL_NAME = "gemini-2.5-flash" 
 
 TZ = ZoneInfo("Asia/Taipei")
 MANUAL_DATE = "2025-11-28" 
 
 MAPPING_DB_FILE = ROOT_DIR / "data" / "db_unit_normalization" / "unit_normalization_db.csv"
+
+FILENAME = os.path.basename(__file__).split(".")[0]
+LOG_FILE_DIR = ROOT_DIR / "src" / "logs" / f"logs={datetime.today().date()}"
+LOG_FILE_DIR.mkdir(parents=True, exist_ok=True)
+LOG_FILE_PATH = LOG_FILE_DIR /  f"{FILENAME}_{datetime.today().date()}.log"
+LOGGER = get_logger(log_file_path=LOG_FILE_PATH, logger_name=FILENAME)
 
 # ================= CONVERSION RULES LIBRARY =================
 # Note: Keys remain in Chinese to match the input CSV data
@@ -142,6 +150,7 @@ class IngredientNormalizer:
         """
 
         max_retries = 3
+        trial = 0
         for attempt in range(max_retries):
             try:
                 response = self.client.models.generate_content(
@@ -154,7 +163,10 @@ class IngredientNormalizer:
                 )
                 return self._clean_and_parse_json(response.text)
             except Exception as e:
-                print(f" API Error ({attempt+1}/{max_retries}): {e}")
+                print(f"API Error ({attempt+1}/{max_retries}): {e}")
+                trial += 1
+                if trial == 3:
+                    raise e
                 time.sleep(3)
         return None
 
@@ -217,11 +229,11 @@ class IngredientNormalizer:
 
         # 2. AI Batch Processing
         if unknown_pairs:
-            BATCH_SIZE = 20 
-            print(f" Starting API call to {MODEL_NAME}...")
+            BATCH_SIZE = 200 
+            print(f"Starting API call to {MODEL_NAME}...")
             for i in range(0, len(unknown_pairs), BATCH_SIZE):
                 batch = unknown_pairs[i:i+BATCH_SIZE]
-                print(f"   Processing batch: {i+1} - {min(i+BATCH_SIZE, len(unknown_pairs))} / {len(unknown_pairs)}...")
+                print(f"Processing batch: {i+1} - {min(i+BATCH_SIZE, len(unknown_pairs))} / {len(unknown_pairs)}...")
                 
                 result = self.ask_gemini(batch)
                 
@@ -321,14 +333,29 @@ class IngredientNormalizer:
 
 def normalize_unit():
     # Adjust path structure as needed
-    input_csv = ROOT_DIR / f"data/db_ingredients/icook_recipe_{MANUAL_DATE}_recipe_ingredients.csv"
-    output_csv = ROOT_DIR / f"data/db_ingredients/icook_recipe_{MANUAL_DATE}_recipe_ingredients_unitN.csv"
+    LOGGER.info(f"Start processing {FILENAME} ... ")
+    # icook_recipe_baby_404_2025-10-24_recipe_ingredients
+    try:
+        file_pattern = ROOT_DIR/"data"/"db_ingredients"/"icook_recipe_saving_money_437_2025-10-23_recipe_ingredients.csv"
+        csv_file_list = glob.glob(str(file_pattern))
+        for csv_file in csv_file_list:
+            try:
+                LOGGER.info(f"Start processing {csv_file} ...")
+                input_csv = Path(csv_file)
+                target_file = str(csv_file).split("/")[-1].split(".")[0]
+                output_csv = Path(ROOT_DIR / f"data/db_ingredients/{target_file}_unitN.csv")
 
-    if input_csv.exists():
-        normalizer = IngredientNormalizer()
-        normalizer.process_csv(input_csv, output_csv)
-    else:
-        print(f" Input file not found: {input_csv}")
+                if input_csv.exists():
+                    normalizer = IngredientNormalizer()
+                    normalizer.process_csv(input_csv, output_csv)
+                else:
+                    print(f"Input file not found: {input_csv}")
+            except Exception as e:
+                LOGGER.error(f"System error: {e}")
+                continue
+    except Exception as e:
+        LOGGER.error(f"Failed to open {file_pattern}")
+        LOGGER.error(f"Error: {e}")
 
 if __name__ == "__main__":
     normalize_unit()

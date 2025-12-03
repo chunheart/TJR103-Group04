@@ -29,8 +29,8 @@ DATA_ROOT_DIR = Path(__file__).resolve().parents[4] # Root dir : /opt/airflow/sr
 CSV_FILE_DIR = DATA_ROOT_DIR / "data" / "archive"
 CSV_FILE_DIR.mkdir(parents=True, exist_ok=True)
 MANUAL_DATE = "2025-10-23"
-CATEGORY = "video"
-CATEGORY_NUMBER = "583"
+CATEGORY = "saving_money"
+CATEGORY_NUMBER = "437"
 COLLECTION = "recipe_ingredients"
 CSV_FILE_PATH = CSV_FILE_DIR / f"icook_{CATEGORY}_{CATEGORY_NUMBER}_{MANUAL_DATE}.csv"
 # icook_baby_404_2025-10-24

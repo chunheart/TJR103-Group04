@@ -55,7 +55,7 @@ def load_unit_normalization():
         conn = vm_mysql_connection()
         LOGGER.info(f"Connected to MySQL")        
         try:
-            file_pattern = ROOT_DIR/"data"/"db_ingredients"/"icook_*_recipe_ingredients_recipe_ingredients_name_norm.csv"
+            file_pattern = ROOT_DIR/"data"/"db_ingredients"/"icook_*_recipe_ingredients_name_norm.csv"
             csv_file_list = glob.glob(str(file_pattern))
             
             for csv_file in csv_file_list:
