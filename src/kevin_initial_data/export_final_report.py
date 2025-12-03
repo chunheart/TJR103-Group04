@@ -7,7 +7,7 @@ from urllib.parse import quote_plus
 DB_HOST = '34.80.161.225'
 DB_PORT = '3307'
 DB_USER = 'root'
-DB_PASS = 'meowsql@1234'
+DB_PASS = 'password'
 DB_NAME = 'EXAMPLE'
 
 # 輸出的報表檔名
