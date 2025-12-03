@@ -5,7 +5,7 @@ import os
 
 # ================= 設定區 =================
 # 原始資料路徑
-SOURCE_FILE = 'src/kevin_initial_data/ytower_all_recipes.csv'
+SOURCE_FILE = 'src/kevin_ytower_crawler/ytower_csv_output/ytower_all_recipes.csv' 
 # 轉換後的輸出檔名
 OUTPUT_FILE = 'recipes_for_upload.csv'
 
