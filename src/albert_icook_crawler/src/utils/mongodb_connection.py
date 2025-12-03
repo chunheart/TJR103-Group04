@@ -5,9 +5,9 @@ from dotenv import load_dotenv
 from pymongo.server_api import ServerApi
 from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).resolve().parents[3] # root directory
-ENV_FILE_PATH = PROJECT_ROOT / "kafka" / ".env"
-load_dotenv()
+PROJECT_ROOT = Path(__file__).resolve().parents[2] # Root : /opt/airflow/src/albert_icook_crawler
+ENV_FILE_PATH = PROJECT_ROOT / "src" / "utils" / ".env"
+load_dotenv(ENV_FILE_PATH)
 
 
 """connect to local MongoDB Server"""
@@ -56,4 +56,4 @@ def close_connection(db_connection):
 if __name__ == "__main__":
     # client = connect_to_online_mongodb()
     # close_connection(client)
-    pass
+    print(PROJECT_ROOT)

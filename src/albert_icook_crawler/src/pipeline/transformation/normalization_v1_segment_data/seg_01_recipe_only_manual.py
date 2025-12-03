@@ -14,17 +14,17 @@ LOG_FILE_DIR = LOG_ROOT_DIR / "logs" / f"logs={datetime.today().date()}"
 LOG_FILE_DIR.mkdir(parents=True, exist_ok=True)
 LOG_FILE_PATH = LOG_FILE_DIR /  f"{FILENAME}_{datetime.today().date()}.log"
 
-DATABASE = "mydatabase"
 COLLECTION = "recipes"
 
 DATA_ROOT_DIR = Path(__file__).resolve().parents[4] # Root dir : /opt/airflow/src/albert_icook_crawler
 CSV_FILE_DIR = DATA_ROOT_DIR / "data" / "daily"
 CSV_FILE_DIR.mkdir(parents=True, exist_ok=True)
-CSV_FILE_PATH = CSV_FILE_DIR / f"Created_on_{datetime.today().date()}" / f"icook_recipe_{datetime.today().date()}.csv"
+MANUAL_DATE = "2025-11-12"
+CSV_FILE_PATH = CSV_FILE_DIR / f"Created_on_{MANUAL_DATE}" / f"icook_recipe_{MANUAL_DATE}.csv"
 
 SAVED_FILE_DIR = DATA_ROOT_DIR / "data" / "db_recipe"
 SAVED_FILE_DIR.mkdir(parents=True, exist_ok=True)
-SAVED_FILE_PATH = SAVED_FILE_DIR / f"icook_recipe_{datetime.today().date()}_{COLLECTION}.csv"
+SAVED_FILE_PATH = SAVED_FILE_DIR / f"icook_recipe_{MANUAL_DATE}_{COLLECTION}.csv"
 
 TZ = ZoneInfo("Asia/Taipei")
 

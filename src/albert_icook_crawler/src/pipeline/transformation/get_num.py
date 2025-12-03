@@ -110,7 +110,7 @@ def match_num_with_digit(matches) -> float | Decimal | str | None:
     for m in matches: # activate this iterate generator
         try:
             """when value is presented as an integer or an integer with decimal, such as 1 or 1.5"""
-            number_part = Decimal(float(m.group(1))).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+            number_part = float(m.group(1))
             return number_part
 
         except ValueError:
@@ -122,12 +122,9 @@ def match_num_with_digit(matches) -> float | Decimal | str | None:
                 fraction[-1] = denominator(分母)
                 """
                 try:
-                    numerator = Decimal(fraction[0])
-                    denominator = Decimal(fraction[-1])
-                    number_part = (numerator / denominator).quantize(
-                        Decimal("0.01"),
-                        rounding=ROUND_HALF_UP,
-                    )
+                    numerator = float(fraction[0])
+                    denominator = float(fraction[-1])
+                    number_part = (numerator / denominator)
                     return number_part
                 except ValueError:
                     return None
@@ -145,29 +142,30 @@ def match_num_with_digit_range(matches) -> float | Decimal | str | None:
                 boolean = any(spe in m.group(1) for spe in ["/"] ) # separate the fraction
                 if not boolean: # second filter -> 1-2 kg
                     range_num = rep.re.split(r"[-~～至到_]", m.group(1))
-                    first_num = Decimal(range_num[0])
-                    last_num = Decimal(range_num[-1])
-                    average = Decimal((first_num + last_num) / 2).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+                    first_num = float(range_num[0])
+                    last_num = float(range_num[-1])
+                    average = float((first_num + last_num) / 2)
                     return average
                 else: # second filter -> 1/2-1/3 kg
                     range_num = rep.re.split(r"[-~～至到_]", m.group(1))
                     first_fraction = range_num[0]
                     if "/" in first_fraction:
                         front_fraction = list(map(int, first_fraction.split("/")))
-                        front = Decimal(front_fraction[0] / front_fraction[-1])
+                        front = float(front_fraction[0] / front_fraction[-1])
                     else:
-                        front = Decimal(first_fraction)
+                        front = float(first_fraction)
                     second_fraction = range_num[-1]
                     if "/" in second_fraction:
                         behind_fraction = list(map(int, second_fraction.split("/")))
-                        behind = Decimal(behind_fraction[0] / behind_fraction[-1])
+                        behind = float(behind_fraction[0] / behind_fraction[-1])
                     else:
-                        behind = Decimal(second_fraction)
+                        behind = float(second_fraction)
 
-                    total = Decimal((front + behind) / 2).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+                    total = float((front + behind) / 2)
                     return total
 
-            except ValueError:
+            except ValueError as e:
+                print(f"{matches} has an issue. \n{e}")
                 return None
     return None
 
@@ -181,7 +179,7 @@ def match_num_with_chinese(matches) -> float | Decimal | str | None:
         # no 分之
         if "分之" not in m.group(1):
             if m.group(1) in rep.CHAR_NUM_MAPS:
-                return Decimal(rep.CHAR_NUM_MAPS[m.group(1)])
+                return float(rep.CHAR_NUM_MAPS[m.group(1)])
             else:
                 return m.group(1)
 
@@ -193,14 +191,12 @@ def match_num_with_chinese(matches) -> float | Decimal | str | None:
             char_fraction[0] = denominator(分母)
             """
             try:
-                numerator = Decimal(rep.CHAR_NUM_MAPS[char_fraction[-1]])
-                denominator = Decimal(rep.CHAR_NUM_MAPS[char_fraction[0]])
-                number_part = (numerator / denominator).quantize(
-                    Decimal("0.01"),
-                    rounding=ROUND_HALF_UP,
-                )
+                numerator = float(rep.CHAR_NUM_MAPS[char_fraction[-1]])
+                denominator = float(rep.CHAR_NUM_MAPS[char_fraction[0]])
+                number_part = float((numerator / denominator))
                 return number_part
-            except ValueError:
+            except ValueError as e:
+                print(f"{matches} has an issue. \n{e}")
                 return None
     return None
 
@@ -216,55 +212,50 @@ def match_num_with_chinese_range(matches) -> float | Decimal | str | None:
             if not boolean: # second filter -> 一 - 二 kg
                 range_num = rep.re.split(r"[-~～至到]", m.group(1))
                 if range_num[0] in rep.CHAR_NUM_MAPS:
-                    first_num = Decimal(rep.CHAR_NUM_MAPS[range_num[0]])
+                    first_num = float(rep.CHAR_NUM_MAPS[range_num[0]])
                 else:
                     return None
                 if range_num[-1] in rep.CHAR_NUM_MAPS:
-                    second_num = Decimal(rep.CHAR_NUM_MAPS[range_num[-1]])
+                    second_num = float(rep.CHAR_NUM_MAPS[range_num[-1]])
                 else:
                     return None
-                total = Decimal((first_num + second_num) / 2).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+                total = float((first_num + second_num) / 2)
                 return total
 
             else: # second filter -> 三分之一 ~ 二分之一
                 range_num = rep.re.split(r"[-~～至到]", m.group(1)) # range_num[0] = "三分之一", range_num[1] = "二分之一"
                 front_fraction = list(map(str, range_num[0].split("分之")))
                 if front_fraction[0] in rep.CHAR_NUM_MAPS:
-                    front_num = Decimal(rep.CHAR_NUM_MAPS[front_fraction[0]]) # front numerator
+                    front_num = float(rep.CHAR_NUM_MAPS[front_fraction[0]]) # front numerator
                 else:
                     return None
                 if front_fraction[-1] in rep.CHAR_NUM_MAPS:
-                    behind_num = Decimal(rep.CHAR_NUM_MAPS[front_fraction[-1]]) # front denominator
+                    behind_num = float(rep.CHAR_NUM_MAPS[front_fraction[-1]]) # front denominator
                 else:
                     return None
-                front_total = Decimal( behind_num / front_num ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+                front_total = float( behind_num / front_num )
 
                 behind_fraction = list(map(str, range_num[-1].split("分之")))
                 if behind_fraction[0] in rep.CHAR_NUM_MAPS:
-                    front_num = Decimal(rep.CHAR_NUM_MAPS[behind_fraction[0]]) # front numerator
+                    front_num = float(rep.CHAR_NUM_MAPS[behind_fraction[0]]) # front numerator
                 else:
                     return None
                 if behind_fraction[-1] in rep.CHAR_NUM_MAPS:
-                    behind_num = Decimal(rep.CHAR_NUM_MAPS[behind_fraction[-1]]) # front denominator
+                    behind_num = float(rep.CHAR_NUM_MAPS[behind_fraction[-1]]) # front denominator
                 else:
                     return None
-                behind_total = Decimal( behind_num / front_num ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+                behind_total = float( behind_num / front_num )
 
-                total = Decimal((front_total + behind_total) / 2).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+                total = float((front_total + behind_total) / 2)
                 return total
 
         except ValueError as e:
-            print(e)
+            print(f"{matches} has an issue. \n{e}")
+
     return None
 
-# if __name__ == '__main__':
-#     text = "1½匙"
-#     matches = rep.CMP_PATTERN_WITH_FRACTION_SYMBOL_WITHOUT_RANGE.finditer(text)
-#     for m in matches:
-#         num = m.group(1)
-#         unit = m.group(2)
-#
-#         for _ in num:
-#             if _ in FRACTION_SYMBOL_NUM_MAPS:
-#                 num = FRACTION_SYMBOL_NUM_MAPS[_]
-#                 x
+if __name__ == '__main__':
+    text = "三四支"
+    ans = get_num_field_quantity(text)
+    print(ans)
+    print(type(ans))

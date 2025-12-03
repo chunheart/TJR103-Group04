@@ -1,10 +1,12 @@
 import google.generativeai as genai
 import json
-from typing import Tuple, Dict, Optional
 import pandas as pd
-import os, sys
+import os
+import time
 import re
 import albert_icook_crawler.src.utils.mongodb_connection as mondb
+
+from typing import Tuple, Dict, Optional
 from albert_icook_crawler.src.utils.get_logger import get_logger
 from albert_icook_crawler.src.pipeline.transformation.get_num import get_num_field_quantity as num
 from albert_icook_crawler.src.pipeline.transformation.get_unit import get_unit_field_quantity as unit
@@ -22,14 +24,34 @@ LOG_FILE_DIR = ROOT_DIR / "src" / "logs" / f"logs={datetime.today().date()}"
 LOG_FILE_DIR.mkdir(parents=True, exist_ok=True)
 LOG_FILE_PATH = LOG_FILE_DIR /  f"{FILENAME}_{datetime.today().date()}.log"
 
-
-CSV_FILE_PATH = ROOT_DIR / "data" / "daily" / f"Created_on_{datetime.today().date()}" / f"icook_recipe_{datetime.today().date()}.csv"
+### CSV ###
+DATA_ROOT_DIR = Path(__file__).resolve().parents[4] # Root dir : /opt/airflow/src/albert_icook_crawler
+CSV_FILE_DIR = DATA_ROOT_DIR / "data" / "archive"
+CSV_FILE_DIR.mkdir(parents=True, exist_ok=True)
+MANUAL_DATE = "2025-10-23"
+CATEGORY = "saving_money"
+CATEGORY_NUMBER = "437"
 COLLECTION = "recipe_ingredients"
-
-DATA_ROOT_DIR = Path(__file__).resolve().parents[4]
+CSV_FILE_PATH = CSV_FILE_DIR / f"icook_{CATEGORY}_{CATEGORY_NUMBER}_{MANUAL_DATE}.csv"
+# icook_baby_404_2025-10-24
+# icook_chinese_349_2025-10-24
+# icook_snack_57_2025-10-23
+# icook_saving_money_437_2025-10-23
+# icook_recipe_58_2025-10-23
+# icook_cookers_59_2025-10-23
+# icook_effect_352_2025-10-23
+# icook_pets_606_2025-10-23
+# icook_fantasy_19_2025-10-23
+# icook_festival_31_2025-10-23
+# icook_general_684_2025-10-23
+# icook_general_ingds_608_2025-10-23
+# icook_jam_460_2025-10-23
+# icook_vegetable_28_2025-10-23
+# icook_video_583_2025-10-23
+### SAVE FILE ###
 SAVED_FILE_DIR = DATA_ROOT_DIR / "data" / "db_ingredients"
 SAVED_FILE_DIR.mkdir(parents=True, exist_ok=True)
-SAVED_FILE_PATH =  SAVED_FILE_DIR / f"icook_recipe_{datetime.today().date()}_{COLLECTION}.csv"
+SAVED_FILE_PATH = SAVED_FILE_DIR / f"icook_recipe_{CATEGORY}_{CATEGORY_NUMBER}_{MANUAL_DATE}_{COLLECTION}.csv"
 
 TZ = ZoneInfo("Asia/Taipei")
 
@@ -37,6 +59,7 @@ TZ = ZoneInfo("Asia/Taipei")
 API_KEY = os.getenv("API_KEY")
 genai.configure(api_key=API_KEY)
 model = genai.GenerativeModel('gemini-2.5-flash')
+BATCH_SIZE = 200
 
 logger = get_logger(log_file_path=LOG_FILE_PATH, logger_name=FILENAME)
 
@@ -227,11 +250,11 @@ def fetch_gemini_response(prompt: str) -> Dict:
         response = model.generate_content(
             prompt,
             generation_config=genai.types.GenerationConfig(
-                max_output_tokens=10000,
+                max_output_tokens=65536,
                 temperature=0.5,
                 response_mime_type="application/json",
             )
-        )
+            )
         cleaned_text = response.text.replace("```json", "").replace("```", "").strip()
         result = json.loads(cleaned_text)
         logger.info("[Status] Response parsed successfully.")
@@ -342,54 +365,92 @@ def get_ingredients_info():
         ### Separate the quantity to get the number part and the unit part dependently
         # Get unit
         logger.info("Retrieving unit only from quantity ...")
-        ingredient_df["unit_name"] = ingredient_df["quantity"].astype(str).apply(unit)
+        ingredient_df_explode["unit_name"] = ingredient_df_explode["quantity"].astype(str).apply(unit)
+        ingredient_df_explode["unit_name"] = ingredient_df_explode["unit_name"].apply(unit_convertion)
         logger.info("Retrieved unit only from quantity")
 
-        ingredient_df["unit_name"] = ingredient_df["unit_name"].apply(unit_convertion)
-
         # Get num
-        ingredient_df["unit_number"] = ingredient_df["quantity"].astype(str).apply(num)
-
+        logger.info("Retrieving number only from quantity ...")
+        ingredient_df_explode["unit_number"] = ingredient_df_explode["quantity"].astype(str).apply(num)
+        logger.info("Retrieved number only from quantity ...")
 
         criteria = ["適量", "少許", "依喜好"]
-        ingredient_df.loc[ingredient_df["unit_name"].isin(criteria), "unit_number"] = float(1)
+        ingredient_df_explode.loc[ingredient_df_explode["unit_name"].isin(criteria), "unit_number"] = float(1)
 
         ### Starting LLM out of Gemini 2.5 flash
 
         # 1.Filter rows (Auto-fill metric units first, return rest for LLM)
-        df = ingredient_df.reset_index(drop=True)
+        df = ingredient_df_explode.reset_index(drop=True)
         df_to_process = get_rows_needing_processing(df)
 
         df_final = pd.DataFrame()
+
         if not df_to_process.empty:
-            # 2. Generate English Prompt with Carbon Footprint context
-            prompt = construct_hybrid_language_prompt(df_to_process)
+            start_time = time.perf_counter()
 
-            # 3. Call API
-            predictions = fetch_gemini_response(prompt)
+            ### Set batches ###
+            batch_size = BATCH_SIZE # Process 200 rows per request to avoid output token limits
+            all_predictions = {} # Dictionary to collect results from all batches
+            
+            total_rows = len(df_to_process) # batch loop
 
-            if predictions:
-                # 4. Update Data
-                df_final, count = update_dataset(df, predictions)
+            for i in range(0, total_rows, BATCH_SIZE):
+                
+                batch_df = df_to_process.iloc[i : i + BATCH_SIZE]
+                current_batch_num = (i // BATCH_SIZE) + 1
+                total_batches = (total_rows + BATCH_SIZE - 1) // BATCH_SIZE
+                
+                logger.info(f"Processing Batch {current_batch_num}/{total_batches} (Rows {i} to {min(i+BATCH_SIZE, total_rows)})...")
+
+                try:
+                    # 2. Generate English Prompt with Carbon Footprint context
+                    prompt = construct_hybrid_language_prompt(batch_df)
+                    
+                    # 3. Call API
+                    batch_predictions = fetch_gemini_response(prompt)
+                    
+                    if batch_predictions:
+                        # 4. Update Data
+                        all_predictions.update(batch_predictions)
+                        logger.info(f"Batch {current_batch_num} success. Collected {len(batch_predictions)} items.")
+                    else:
+                        logger.warning(f"Batch {current_batch_num} returned empty result.")
+
+                except Exception as batch_e:
+                    logger.error(f"Error in Batch {current_batch_num}: {batch_e}")
+                time.sleep(5)
+            
+            logger.info(f"[Batch Process] Finished. Total collected predictions: {len(all_predictions)}")
+                
+            if all_predictions:    
+                df_final, count = update_dataset(df, all_predictions)
+
+                end_time = time.perf_counter()
+                seconds = (end_time - start_time) 
+                mins = (end_time - start_time) // 60
 
                 logger.info(f"\n[Result] Successfully updated {count} rows via LLM.")
+                logger.info(f"Applementing values takes about {seconds} seconds / {mins} minutes.")
 
-        else:
-            logger.info("[Result] No rows required LLM inference. All data is clean or auto-filled.")
-            df_final = ingredient_df
+            else:
+                logger.info("[Result] No rows required LLM inference. All data is clean or auto-filled.")
+                df_final = ingredient_df_explode
         ### Processing LLM out of Gemini 2.5 flash
-
-        df_final["unit_number"] = df_final["unit_number"].apply(lambda x: float(x)) 
+        try:
+            df_final["unit_number"] = df_final["unit_number"].apply(lambda x: float(x))
+            logger.info("Converted values in the unit_number into float.")
+        except ValueError:
+            pass
 
         # Save the final result into CSV file
         df_final.to_csv(SAVED_FILE_PATH, index=False)
+        logger.info(f"File saved to {SAVED_FILE_PATH}")
 
     except Exception as e:
         logger.error(f"{e}")
 
     finally:
         logger.info(f"Finished execution of {FILENAME}")
-
 
 if __name__ == "__main__":
     get_ingredients_info()

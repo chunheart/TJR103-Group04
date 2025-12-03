@@ -1,10 +1,11 @@
+import glob
 import google.generativeai as genai
 import json
 from typing import Tuple, Dict, Optional
 import pandas as pd
 import os, sys
 import re
-import albert_icook_crawler.src.utils.mongodb_connection as mondb
+
 from albert_icook_crawler.src.utils.get_logger import get_logger
 from albert_icook_crawler.src.pipeline.transformation.get_num import get_num_field_quantity as num
 from albert_icook_crawler.src.pipeline.transformation.get_unit import get_unit_field_quantity as unit
@@ -22,21 +23,34 @@ LOG_FILE_DIR = ROOT_DIR / "src" / "logs" / f"logs={datetime.today().date()}"
 LOG_FILE_DIR.mkdir(parents=True, exist_ok=True)
 LOG_FILE_PATH = LOG_FILE_DIR /  f"{FILENAME}_{datetime.today().date()}.log"
 
-
-CSV_FILE_PATH = ROOT_DIR / "data" / "daily" / f"Created_on_{datetime.today().date()}" / f"icook_recipe_{datetime.today().date()}.csv"
+MANUAL_DATE = "2025-11-12"
+CSV_FILE_PATH = ROOT_DIR / "data" / "daily" / f"Created_on_{MANUAL_DATE}" / f"icook_recipe_{MANUAL_DATE}.csv"
 COLLECTION = "recipe_ingredients"
 
 DATA_ROOT_DIR = Path(__file__).resolve().parents[4]
 SAVED_FILE_DIR = DATA_ROOT_DIR / "data" / "db_ingredients"
 SAVED_FILE_DIR.mkdir(parents=True, exist_ok=True)
-SAVED_FILE_PATH =  SAVED_FILE_DIR / f"icook_recipe_{datetime.today().date()}_{COLLECTION}.csv"
+SAVED_FILE_PATH =  SAVED_FILE_DIR / f"icook_recipe_{MANUAL_DATE}_{COLLECTION}.csv"
+
+MOVE_DIR = ROOT_DIR / "data" / "archive" / f"processed={datetime.today().date()}"
+MOVE_DIR.mkdir(exist_ok=True, parents=True)
 
 TZ = ZoneInfo("Asia/Taipei")
 
 # Gemini Configuration
 API_KEY = os.getenv("API_KEY")
 genai.configure(api_key=API_KEY)
-model = genai.GenerativeModel('gemini-2.5-flash')
+generation_config = {
+        "temperature": 0.8,
+        "top_p": 0.95,
+        "top_k": 64,
+        "max_output_tokens": 800000,
+        "response_mime_type": "application/json",
+    }
+model = genai.GenerativeModel(
+    model_name='gemini-2.5-flash',
+    generation_config=generation_config,
+)
 
 logger = get_logger(log_file_path=LOG_FILE_PATH, logger_name=FILENAME)
 
@@ -224,21 +238,14 @@ def fetch_gemini_response(prompt: str) -> Dict:
     """
     logger.info("[Status] Calling Gemini API...")
     try:
-        response = model.generate_content(
-            prompt,
-            generation_config=genai.types.GenerationConfig(
-                max_output_tokens=10000,
-                temperature=0.5,
-                response_mime_type="application/json",
-            )
-        )
+        response = model.generate_content(prompt)
         cleaned_text = response.text.replace("```json", "").replace("```", "").strip()
         result = json.loads(cleaned_text)
         logger.info("[Status] Response parsed successfully.")
         return result
     except Exception as e:
         logger.error(f"[Error] API call or parsing failed: {e}")
-        return {}
+        raise e
 
 
 def update_dataset(df: pd.DataFrame, predictions: Dict) -> Tuple[pd.DataFrame, int]:
@@ -288,10 +295,6 @@ def get_ingredients_info():
     8) ins_timestamp        datetime.timestamp()
     9) update_timestamp    datetime.timestamp()
     ### Algorithm:
-    - establish logging V
-    - mongodb connection V
-    - db collection V
-    - collection connection V
     - find today's icook recipe CSV file V
     - convert it into pandas dataframe V
     - select determined field V
@@ -302,90 +305,110 @@ def get_ingredients_info():
     """
 
     logger.info(f"Starting execution of {FILENAME}")
-
     try:
-        with open(file=CSV_FILE_PATH, mode="r", encoding="utf-8-sig") as csv:
-            raw_df = pd.read_csv(csv)
-            logger.info(f"Opened CSV file: {str(CSV_FILE_PATH).split("/")[-1].strip()}")
+        file_pattern = ROOT_DIR / "data" / "archive" / "icook_9*.csv"
+        csv_file_list = glob.glob(str(file_pattern))
+        for csv_file in csv_file_list:
+            try:
+                with open(file=csv_file, mode="r", encoding="utf-8-sig") as csv:
+                    raw_df = pd.read_csv(csv)
+                    logger.info(f"Opened CSV file: {str(csv_file).split("/")[-1].strip()}")
 
-        switch = False
-        for col in raw_df.columns:
-            if col == "recipe_source":
-                switch = True
-                break
+                switch = False
+                for col in raw_df.columns:
+                    if col == "recipe_source":
+                        switch = True
+                        break
 
-        if not switch:
-            raw_df["recipe_source"] = "icook"
+                if not switch:
+                    raw_df["recipe_source"] = "icook"
 
-        mask = [
-            "recept_id",
-            "recipe_source",
-            "recept_type",
-            "ingredients",
-            "quantity",
-        ]
-        ingredient_df = raw_df[mask]
-        int_time, upd_time = datetime.now(tz=TZ).strftime("%Y-%m-%d %H:%M:%S"), datetime.now(tz=TZ).strftime("%Y-%m-%d %H:%M:%S")
-        ingredient_df["ins_timestamp"] = int_time
-        ingredient_df["upd_timestamp"] = upd_time
+                mask = [
+                    "recept_id",
+                    "recipe_source",
+                    "recept_type",
+                    "ingredients",
+                    "quantity",
+                ]
+                ingredient_df = raw_df[mask]
+                int_time, upd_time = datetime.now(tz=TZ).strftime("%Y-%m-%d %H:%M:%S"), datetime.now(tz=TZ).strftime("%Y-%m-%d %H:%M:%S")
+                ingredient_df["ins_timestamp"] = int_time
+                ingredient_df["upd_timestamp"] = upd_time
 
-        # Drop Null values of field ingredients
-        logger.info("Dropping the values that are Null...")
-        ingredient_df.dropna(subset=["ingredients"], inplace=True)
-        logger.info("Dropping completed")
+                # Drop Null values of field ingredients
+                logger.info("Dropping the values that are Null...")
+                ingredient_df.dropna(subset=["ingredients"], inplace=True)
+                logger.info("Dropping completed")
 
-        # Unwind values of field ingredients
-        logger.info("Unwinding ...")
-        ingredient_df_explode = unwind(ingredient_df, "ingredients")
-        logger.info("Unwinding completed")
+                # Unwind values of field ingredients
+                logger.info("Unwinding ...")
+                ingredient_df_explode = unwind(ingredient_df, "ingredients")
+                logger.info("Unwinding completed")
 
-        ### Separate the quantity to get the number part and the unit part dependently
-        # Get unit
-        logger.info("Retrieving unit only from quantity ...")
-        ingredient_df["unit_name"] = ingredient_df["quantity"].astype(str).apply(unit)
-        logger.info("Retrieved unit only from quantity")
+                ### Separate the quantity to get the number part and the unit part dependently
+                # Get unit
+                logger.info("Retrieving unit only from quantity ...")
+                ingredient_df_explode["unit_name"] = ingredient_df_explode["quantity"].fillna("").astype(str).apply(unit)
+                ingredient_df_explode["unit_name"] = ingredient_df_explode["unit_name"].apply(unit_convertion)
+                logger.info("Retrieved unit only from quantity")
 
-        ingredient_df["unit_name"] = ingredient_df["unit_name"].apply(unit_convertion)
+                # Get num
+                logger.info("Retrieving number only from quantity ...")
+                ingredient_df_explode["unit_number"] = ingredient_df_explode["quantity"].fillna("").astype(str).apply(num)
+                logger.info("Retrieved number only from quantity ...")
 
-        # Get num
-        ingredient_df["unit_number"] = ingredient_df["quantity"].astype(str).apply(num)
 
+                criteria = ["適量", "少許", "依喜好"]
+                ingredient_df_explode.loc[ingredient_df_explode["unit_name"].isin(criteria), "unit_number"] = float(1)
 
-        criteria = ["適量", "少許", "依喜好"]
-        ingredient_df.loc[ingredient_df["unit_name"].isin(criteria), "unit_number"] = float(1)
+                ### Starting LLM out of Gemini 2.5 flash
 
-        ### Starting LLM out of Gemini 2.5 flash
+                # 1.Filter rows (Auto-fill metric units first, return rest for LLM)
+                df = ingredient_df_explode.reset_index(drop=True)
+                df_to_process = get_rows_needing_processing(df)
 
-        # 1.Filter rows (Auto-fill metric units first, return rest for LLM)
-        df = ingredient_df.reset_index(drop=True)
-        df_to_process = get_rows_needing_processing(df)
+                df_final = pd.DataFrame()
+                if not df_to_process.empty:
+                    # 2. Generate English Prompt with Carbon Footprint context
+                    prompt = construct_hybrid_language_prompt(df_to_process)
 
-        df_final = pd.DataFrame()
-        if not df_to_process.empty:
-            # 2. Generate English Prompt with Carbon Footprint context
-            prompt = construct_hybrid_language_prompt(df_to_process)
+                    # 3. Call API
+                    predictions = fetch_gemini_response(prompt)
 
-            # 3. Call API
-            predictions = fetch_gemini_response(prompt)
+                    if predictions:
+                        # 4. Update Data
+                        df_final, count = update_dataset(df, predictions)
 
-            if predictions:
-                # 4. Update Data
-                df_final, count = update_dataset(df, predictions)
+                        logger.info(f"\n[Result] Successfully updated {count} rows via LLM.")
 
-                logger.info(f"\n[Result] Successfully updated {count} rows via LLM.")
+                else:
+                    logger.info("[Result] No rows required LLM inference. All data is clean or auto-filled.")
+                    df_final = ingredient_df_explode
+                ### Processing LLM out of Gemini 2.5 flash
 
-        else:
-            logger.info("[Result] No rows required LLM inference. All data is clean or auto-filled.")
-            df_final = ingredient_df
-        ### Processing LLM out of Gemini 2.5 flash
+                df_final["unit_number"] = df_final["unit_number"].apply(lambda x: float(x)) 
 
-        df_final["unit_number"] = df_final["unit_number"].apply(lambda x: float(x)) 
+                # Save the final result into CSV file
+                target_csv_file = str(csv_file).split("/")[-1].split(".")[0] # icook_2
+                saved_file_path = SAVED_FILE_DIR / f"{target_csv_file}_recipe_ingredients.csv"
+                df_final.to_csv(saved_file_path, index=False)
 
-        # Save the final result into CSV file
-        df_final.to_csv(SAVED_FILE_PATH, index=False)
+                # Move processed file
+                target_csv_file = str(csv_file).split("/")[-1]
+                move_file_path = MOVE_DIR / target_csv_file
+                os.rename(
+                    src=Path(csv_file),
+                    dst=Path(move_file_path)
+                )
+                logger.info(f"Processed file has been moved to {move_file_path}")
+
+            except Exception as e:
+                logger.error(f"Failed to process {csv_file} ")
+                logger.error(f"{e}")
+                continue
 
     except Exception as e:
-        logger.error(f"{e}")
+        logger.error(f"Glob function error:\n{e}")
 
     finally:
         logger.info(f"Finished execution of {FILENAME}")

@@ -14,17 +14,31 @@ LOG_FILE_DIR = LOG_ROOT_DIR / "logs" / f"logs={datetime.today().date()}"
 LOG_FILE_DIR.mkdir(parents=True, exist_ok=True)
 LOG_FILE_PATH = LOG_FILE_DIR /  f"{FILENAME}_{datetime.today().date()}.log"
 
-DATABASE = "mydatabase"
 COLLECTION = "recipes"
 
 DATA_ROOT_DIR = Path(__file__).resolve().parents[4] # Root dir : /opt/airflow/src/albert_icook_crawler
-CSV_FILE_DIR = DATA_ROOT_DIR / "data" / "daily"
+CSV_FILE_DIR = DATA_ROOT_DIR / "data" / "archive"
 CSV_FILE_DIR.mkdir(parents=True, exist_ok=True)
-CSV_FILE_PATH = CSV_FILE_DIR / f"Created_on_{datetime.today().date()}" / f"icook_recipe_{datetime.today().date()}.csv"
-
+MANUAL_DATE = "2025-10-24"
+CATEGORY = "baby"
+CATEGORY_NUMBER = "404"
+CSV_FILE_PATH = CSV_FILE_DIR / f"icook_{CATEGORY}_{CATEGORY_NUMBER}_{MANUAL_DATE}.csv"
+# icook_snack_57_2025-10-23
+# icook_saving_money_437_2025-10-23
+# icook_recipe_58_2025-10-23
+# icook_pets_606_2025-10-23
+# icook_jam_460_2025-10-23
+# icook_general_ingds_608_2025-10-23
+# icook_general_684_2025-10-23
+# icook_festival_31_2025-10-23
+# icook_fantasy_19_2025-10-23
+# icook_effect_352_2025-10-23
+# icook_cookers_59_2025-10-23
+# icook_chinese_349_2025-10-24
+# icook_baby_404_2025-10-24
 SAVED_FILE_DIR = DATA_ROOT_DIR / "data" / "db_recipe"
 SAVED_FILE_DIR.mkdir(parents=True, exist_ok=True)
-SAVED_FILE_PATH = SAVED_FILE_DIR / f"icook_recipe_{datetime.today().date()}_{COLLECTION}.csv"
+SAVED_FILE_PATH = SAVED_FILE_DIR / f"icook_recipe_{CATEGORY}_{CATEGORY_NUMBER}_{MANUAL_DATE}_{COLLECTION}.csv"
 
 TZ = ZoneInfo("Asia/Taipei")
 

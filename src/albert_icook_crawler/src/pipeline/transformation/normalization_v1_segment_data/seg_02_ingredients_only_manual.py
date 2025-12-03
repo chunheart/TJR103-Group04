@@ -22,14 +22,14 @@ LOG_FILE_DIR = ROOT_DIR / "src" / "logs" / f"logs={datetime.today().date()}"
 LOG_FILE_DIR.mkdir(parents=True, exist_ok=True)
 LOG_FILE_PATH = LOG_FILE_DIR /  f"{FILENAME}_{datetime.today().date()}.log"
 
-
-CSV_FILE_PATH = ROOT_DIR / "data" / "daily" / f"Created_on_{datetime.today().date()}" / f"icook_recipe_{datetime.today().date()}.csv"
+MANUAL_DATE = "2025-11-12"
+CSV_FILE_PATH = ROOT_DIR / "data" / "daily" / f"Created_on_{MANUAL_DATE}" / f"icook_recipe_{MANUAL_DATE}.csv"
 COLLECTION = "recipe_ingredients"
 
 DATA_ROOT_DIR = Path(__file__).resolve().parents[4]
 SAVED_FILE_DIR = DATA_ROOT_DIR / "data" / "db_ingredients"
 SAVED_FILE_DIR.mkdir(parents=True, exist_ok=True)
-SAVED_FILE_PATH =  SAVED_FILE_DIR / f"icook_recipe_{datetime.today().date()}_{COLLECTION}.csv"
+SAVED_FILE_PATH =  SAVED_FILE_DIR / f"icook_recipe_{MANUAL_DATE}_{COLLECTION}.csv"
 
 TZ = ZoneInfo("Asia/Taipei")
 
@@ -224,14 +224,7 @@ def fetch_gemini_response(prompt: str) -> Dict:
     """
     logger.info("[Status] Calling Gemini API...")
     try:
-        response = model.generate_content(
-            prompt,
-            generation_config=genai.types.GenerationConfig(
-                max_output_tokens=10000,
-                temperature=0.5,
-                response_mime_type="application/json",
-            )
-        )
+        response = model.generate_content(prompt)
         cleaned_text = response.text.replace("```json", "").replace("```", "").strip()
         result = json.loads(cleaned_text)
         logger.info("[Status] Response parsed successfully.")
@@ -342,22 +335,22 @@ def get_ingredients_info():
         ### Separate the quantity to get the number part and the unit part dependently
         # Get unit
         logger.info("Retrieving unit only from quantity ...")
-        ingredient_df["unit_name"] = ingredient_df["quantity"].astype(str).apply(unit)
+        ingredient_df_explode["unit_name"] = ingredient_df_explode["quantity"].apply(unit)
         logger.info("Retrieved unit only from quantity")
 
-        ingredient_df["unit_name"] = ingredient_df["unit_name"].apply(unit_convertion)
+        ingredient_df_explode["unit_name"] = ingredient_df_explode["unit_name"].apply(unit_convertion)
 
         # Get num
-        ingredient_df["unit_number"] = ingredient_df["quantity"].astype(str).apply(num)
+        ingredient_df_explode["unit_number"] = ingredient_df_explode["quantity"].apply(num)
 
 
         criteria = ["適量", "少許", "依喜好"]
-        ingredient_df.loc[ingredient_df["unit_name"].isin(criteria), "unit_number"] = float(1)
+        ingredient_df_explode.loc[ingredient_df_explode["unit_name"].isin(criteria), "unit_number"] = float(1)
 
         ### Starting LLM out of Gemini 2.5 flash
 
         # 1.Filter rows (Auto-fill metric units first, return rest for LLM)
-        df = ingredient_df.reset_index(drop=True)
+        df = ingredient_df_explode.reset_index(drop=True)
         df_to_process = get_rows_needing_processing(df)
 
         df_final = pd.DataFrame()
@@ -376,7 +369,7 @@ def get_ingredients_info():
 
         else:
             logger.info("[Result] No rows required LLM inference. All data is clean or auto-filled.")
-            df_final = ingredient_df
+            df_final = ingredient_df_explode
         ### Processing LLM out of Gemini 2.5 flash
 
         df_final["unit_number"] = df_final["unit_number"].apply(lambda x: float(x)) 
