@@ -27,11 +27,12 @@ tz = pytz.timezone("Asia/Taipei")
 
 # ==============================
 # 🧩 Kafka 初始化（保留原本邏輯）
+# , "kafka-server:9092"
 # ==============================
 try:
     from kafka import KafkaProducer
     producer = KafkaProducer(
-        bootstrap_servers=["kafka-server:29092", "kafka-server:9092"],
+        bootstrap_servers=["kafka-server:29092"],
         value_serializer=lambda v: json.dumps(v, ensure_ascii=False).encode("utf-8"),
         linger_ms=100
     )

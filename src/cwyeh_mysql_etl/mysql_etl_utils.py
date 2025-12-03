@@ -12,9 +12,11 @@ import pandas as pd
 import datetime as dt
 import pymysql
 import requests
+from google import genai
 
 import cwyeh_coemission.carboncloud_crawler as cbc
 import cwyeh_coemission.myemission_crawler as mec
+import kevin_food_unit_normalization.main as unor
 
 
 """
@@ -24,17 +26,54 @@ Utils for mysql ETL, CRUD.
 
 # GLOBALs ------------------------------------------------------------
 TRANS_API_KEY = os.getenv("MY_GOOGLE_TRANS_API_KEY")
+GEMINI_API_KEY = os.getenv("MY_GEMINI_API_KEY")
+MYSQL_PASSWORD = os.getenv("MYSQL_ROOT_PASSWORD")
 
 
 ### Helpers
 def get_normalize(ori_ingredient_name: str) -> str:
     """回傳正規化後的食材名稱（暫時直接回原名或做簡單標準化）"""
-    return ori_ingredient_name[-2:]
+    return ori_ingredient_name
 
 
-def query_unit2gram(ori_ingredient_name: str, unit_name: str) -> float | None:
-    """查詢該食材 + 單位對應的克重；查不到回 None"""    
-    return random.uniform(0,200)
+def query_unit2gram(pair_list,batch_size=30) -> list:
+    """
+    查詢該食材 + 單位對應的克重
+    pair_list - [{'name':'雞蛋','unit':'顆'},]
+
+    #random.uniform(0,200)
+    """
+
+    class SimpleUnitNormalize(unor.IngredientNormalizer):
+        def __init__(self,key):
+            self.client = genai.Client(api_key=key)
+            self.mapping_db = super()._load_mapping_db()
+    my_nor_unit = SimpleUnitNormalize(key=GEMINI_API_KEY)
+
+    ### ask gemini
+    size = len(pair_list)
+    batch = math.ceil(size/batch_size)
+    res_collect = []
+    for b in range(batch):
+        b_res = my_nor_unit.ask_gemini(pair_list[b*batch_size:(b+1)*batch_size])
+        res_collect += b_res.get('items',[])
+
+    ### if not found - use adhoc rule
+    for r in res_collect:
+        unit = r.get('unit')
+        unit2gram_value = r.get('g_per_unit')
+        if unit2gram_value == 0 or unit2gram_value == None:
+            print('Try to use pre-defined rule')
+            if unor.STANDARD_RULES.get(unit):
+                print('Update with pre-defined rule STANDARD_RULES')
+                r['g_per_unit'] = unor.STANDARD_RULES.get(unit)
+            elif unor.VOLUME_TO_ML.get(unit):
+                print('Update with pre-defined rule VOLUME_TO_ML')
+                r['g_per_unit'] = unor.VOLUME_TO_ML.get(unit)
+            else:
+                print('Fail to capture in pre-defined rule')
+                r['g_per_unit'] = None
+    return res_collect
 
 
 def translate(qlist: list[str], key, target_lang: str = "zh-TW") -> list[str]:
@@ -57,13 +96,12 @@ def translate(qlist: list[str], key, target_lang: str = "zh-TW") -> list[str]:
 
 def query_coemission(nor_ingredient_name: list[str]) -> dict:
     """
-    查詢碳排係數，回 dict 或 None。
-    範例回傳結構：{'beef': {'coe_values':100,'coe_status':'done'}, 'poork':{'coe_values':None,'coe_status':'error'}}
-    
-    Backlog
-    - modify error control
+    查詢食材名稱的碳排係數，回 dict
+    - take zh-TW, translate to EN and query
+    - return example
+        {'牛肉': {'eng_query':'beef','coe_values':100,'coe_status':'done'}}
     """
-        
+    
     ### translate - mapping
     eng_to_query = translate(
         qlist=nor_ingredient_name,
@@ -71,22 +109,31 @@ def query_coemission(nor_ingredient_name: list[str]) -> dict:
         target_lang='EN',
     )
     eng_to_query = [s.lower().strip() for s in eng_to_query]
-    print(eng_to_query)
+    print('Query ingredient coemission:',nor_ingredient_name,eng_to_query)
+
+    ### on-fail return
+    fail_res = pd.DataFrame({"query": nor_ingredient_name,"eng_query":eng_to_query,"coe_values":None,"coe_status":'error',})
+    fail_res = fail_res.set_index("query").to_dict(orient="index")
 
     ### crawl and get res (pd.Dataframe)
     res = cbc.carboncloud_crawler(query_list=eng_to_query)
     try:
         if res == None:
             print('[Warning] On crawling fail, return pre-defined data')
-            res = pd.DataFrame({"query": nor_ingredient_name,"eng_query":eng_to_query,"coe_values":None,"coe_status":'error',})
-            return res.set_index("query").to_dict(orient="index")
+            return fail_res
     except:
         pass
 
     ### clean response carbon data [keep 1 for each query]
-    filter_if_contain = res.apply(lambda r: r["query"] in r["prod_name"],axis=1)
-    cleaned_res = res[filter_if_contain]
+    # (1) prod_name contain in query (2) keep top 3 similar name and avg
+    # filter_if_contain = res.apply(lambda r: r["query"] in r["prod_name"],axis=1)
+    # cleaned_res = res[filter_if_contain].copy()  # To avoid [SettingWithCopyWarning]
+    cleaned_res = res.copy()
+    if cleaned_res.shape[0] == 0:
+        print('[Warning] No at least 1 valid record')
+        return fail_res
     cleaned_res['score'] = cleaned_res.apply(lambda r: SequenceMatcher(None, r['query'], r['prod_name']).ratio(),axis=1)
+    cleaned_res['total_coe'] = pd.to_numeric(cleaned_res['total_coe'], errors="coerce")
     cleaned_res = cleaned_res.sort_values(["query", "score"], ascending=[True, False]).groupby("query").head(3)
     cleaned_res = cleaned_res.groupby("query", as_index=False)["total_coe"].mean()\
             .rename(columns={"total_coe":"coe_values","query":"eng_query"})
@@ -113,7 +160,8 @@ def batch_operator(batch_size,func):
 
 # Init ------------------------------------------------------------
 def get_mysql_connection(
-        host,port,user,password,
+        host,port,user,
+        password=MYSQL_PASSWORD,
         db=None,
         charset="utf8mb4",
         connect_timeout=5,
@@ -153,6 +201,7 @@ def init_tables(
     db_name='EXAMPLE',
     insert_example_records=True,
     drop_tables_if_exists=False,
+    create_index=True,
 ):
     """
     Initialize of tables in assigned DB
@@ -162,19 +211,18 @@ def init_tables(
     - protection with user_permission !?
     """
 
-    # 建立資料庫
+    ### 建立資料庫
     cursor = conn.cursor()
     cursor.execute(f"CREATE DATABASE IF NOT EXISTS {db_name} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;")
     conn.select_db(db_name)
 
-    # drop_tables_if_exists
+    ### Create tables (DDL)
+    # UNIQUE KEY `uniq_ori_ingredient_name` (`ori_ingredient_name`)
     tables = ["recipe_ingredient", "unit_normalize", "ingredient_normalize", "carbon_emission", "recipe"]
     if drop_tables_if_exists:
         for t in tables:
             cursor.execute(f"DROP TABLE IF EXISTS `{t}`;")
     
-    # create tables (DDL)
-    # UNIQUE KEY `uniq_ori_ingredient_name` (`ori_ingredient_name`)
     ddls = {
         "recipe": """
             CREATE TABLE IF NOT EXISTS `recipe` (
@@ -247,12 +295,39 @@ def init_tables(
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
         """,
     }
-
     for name, ddl in ddls.items():
         print('Create table',name,ddl)
         cursor.execute(ddl)
 
-    ###
+    ### create additional index
+    if create_index:
+        index_ddls = [
+            """
+            CREATE INDEX idx_u2g_status
+            ON unit_normalize (u2g_status);
+            """,
+            """
+            CREATE INDEX idx_coe_status
+            ON carbon_emission (coe_status);
+            """,
+            """
+            CREATE INDEX idx_normalize_status
+            ON ingredient_normalize (normalize_status);
+            """,
+            """
+            CREATE INDEX idx_publish_time ON recipe (publish_time)
+            """,
+        ]
+        for ddl in index_ddls:
+            try:
+                cursor.execute(ddl)
+            except pymysql.err.OperationalError as e:
+                # 若索引已存在會拋錯 “Duplicate key name”
+                print('Duplicated idx:',e)
+            except Exception as e:
+                print('Other errors:',e)
+
+    ### Insert example records
     if insert_example_records:
         cursor.execute("""
             INSERT INTO `recipe`
@@ -514,6 +589,22 @@ def clean_recipe_data(recipe_json:list[dict]) -> list[dict]:
         return
     df = pd.DataFrame(recipe_json)
     
+    ### column mapping
+    df = df.rename(columns={
+        'ID':'recipe_id',
+        'site':'recipe_site',
+        '食譜名稱':'recipe_name',
+        "來源":'recipe_url',
+        '作者':'author',
+        '食用人數':'servings',
+        '類型':'ingredient_type',
+        '名稱':'ingredient_name',
+        '重量':'weight_value',
+        '重量單位':'weight_unit',
+        '上線日期':'publish_date',
+        '爬蟲時間':'crawl_time',
+    })
+
     ### unifiy columns
     need_cols = [
         "recipe_id", "recipe_site", "recipe_name", "recipe_url","author", "servings",
@@ -540,7 +631,8 @@ def clean_recipe_data(recipe_json:list[dict]) -> list[dict]:
         df[c] = pd.to_datetime(df[c], errors="coerce")
         df[c] = df[c].dt.strftime("%Y-%m-%d %H:%M:%S").replace({pd.NaT: None})
 
-    # numbers
+    # numbers (try to extract, convert)
+    df["servings"] = df["servings"].str.extract(r"(\d+)")
     for c in ["servings", "weight_value"]:
         df[c] = pd.to_numeric(df[c], errors="coerce")
         df[c] = df[c].where(df[c] > 0)
@@ -705,7 +797,6 @@ def register_coemission_from_recipe(conn, recipe_json: list[dict]):
             """
         cur.execute(sql)
         nor_names = {r["nor_ingredient_name"] for r in cur.fetchall()}
-    print(nor_names)
 
     ### 2. get noramalized name not in carbon_emission
     with conn.cursor() as cur:
@@ -899,9 +990,13 @@ def update_unit_w_u2g(conn):
         print(f"Found {len(rows)} pending rows")
     
     ### 2. ingredient_name-unit pair to gram (u2g)
+    unit_pair_to_query = [{'name':row.get("ori_ingredient_name"),'unit':row.get("unit_name")} for row in rows]
+    unit_pair_res = query_unit2gram(unit_pair_to_query)
+    print(unit_pair_res)
+    unit_pair_to_g_map = {(r.get('name'), r.get('unit')):r.get('g_per_unit') for r in unit_pair_res} # dict[(pair):value]
     update_values = []
     for row in rows:
-        u2g_values = query_unit2gram(row["ori_ingredient_name"],row["unit_name"])
+        u2g_values = unit_pair_to_g_map.get((row.get('ori_ingredient_name'),row.get('unit_name')))
         if u2g_values is None:
             new_status = "error"
         else:
@@ -946,14 +1041,17 @@ def update_coemission_w_query(conn):
     ### 2. query coemission
     update_values = []
     for row in rows:
-        coe_values = query_coemission([row["nor_ingredient_name"]])
+        query_ingr_name = row["nor_ingredient_name"]
+        coe_values = query_coemission([query_ingr_name])
+        print(coe_values)
         update_values.append((
             'carboncloud',
+            coe_values.get(query_ingr_name,{}).get('eng_query'),
             None,
-            coe_values[row["nor_ingredient_name"]]['coe_values'],
+            coe_values.get(query_ingr_name,{}).get('coe_values'),
             dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            coe_values[row["nor_ingredient_name"]]['coe_status'], 
-            row["nor_ingredient_name"]
+            coe_values.get(query_ingr_name,{}).get('coe_status','error'),
+            query_ingr_name,
         ))
 
     ### 3. update
@@ -961,6 +1059,7 @@ def update_coemission_w_query(conn):
         sql ="""
         UPDATE carbon_emission
         SET coe_source = %s,
+            ref_ingredient_name = %s,
             coe_category = %s,
             weight_g2g = %s,
             crawl_time = %s,

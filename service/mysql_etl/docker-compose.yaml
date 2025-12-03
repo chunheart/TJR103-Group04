@@ -4,7 +4,8 @@ services:
     image: mysql:8.4.7
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: pas4word
+      MYSQL_ROOT_PASSWORD: $MYSQL_PASSWORD
+      TZ: Asia/Taipei
     ports:
       - "3307:3306"
     networks:
@@ -35,6 +36,8 @@ services:
     build: 
       context: .
       dockerfile: airflow.Dockerfile
+      args:
+        AIRFLOW_PASSWORD: $AIRFLOW_PASSWORD
     container_name: py_airflow
     restart: unless-stopped
     ports:
@@ -52,8 +55,11 @@ services:
       - $PWD/src:/opt/airflow/src
     environment:
       PYTHONPATH: "/opt/airflow/src"
+      TZ: Asia/Taipei
       AIRFLOW__WEBSERVER__SHOW_TRIGGER_FORM_IF_NO_PARAMS: "true"
       MY_GOOGLE_TRANS_API_KEY: $MY_GOOGLE_TRANS_API_KEY
+      MY_GEMINI_API_KEY: $MY_GEMINI_API_KEY
+      MYSQL_ROOT_PASSWORD: $MYSQL_PASSWORD
 
 volumes:
   mysql_data:
