@@ -1,5 +1,5 @@
 services:
-  # 🦓 Zookeeper
+  # Zookeeper
   zookeeper-server:
     image: confluentinc/cp-zookeeper:7.5.3
     container_name: zookeeper-server
@@ -10,7 +10,7 @@ services:
     networks:
       - kafka-net
 
-  # 🦒 Kafka Broker
+  # Kafka Broker
   kafka-server:
     image: confluentinc/cp-kafka:7.5.3
     container_name: kafka-server
@@ -23,17 +23,17 @@ services:
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: "zookeeper-server:2181"
-      # ✅ Kafka 內外雙通用
+      # Kafka 內外雙通用
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
       KAFKA_LISTENERS: INTERNAL://0.0.0.0:29092,EXTERNAL://0.0.0.0:9092
-      # ✅ Console 用 INTERNAL；外部 ngrok 用 EXTERNAL
+      # Console 用 INTERNAL；外部 ngrok 用 EXTERNAL
       KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka-server:29092,EXTERNAL://192.168.5.49:9092
       KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
     networks:
       - kafka-net
 
-  # 🐼 Redpanda Console
+  # Redpanda Console
   redpanda-console-server:
     image: docker.redpanda.com/redpandadata/console:latest
     container_name: redpanda-console-server
@@ -43,7 +43,7 @@ services:
     ports:
       - "19900:8080"
     environment:
-      # ✅ 這裡只要填容器內部位址
+      # 這裡只要填容器內部位址
       KAFKA_BROKERS: kafka-server:29092
     networks:
       - kafka-net
