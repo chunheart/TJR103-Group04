@@ -7,10 +7,10 @@ services:
     restart: always
     command: python consumer_mongo.py
     volumes:
-      - ./logs:/app/logs          # ✅ 新增：讓容器內 /app/logs 持久化到宿主機
+      - ./logs:/app/logs          # 新增：讓容器內 /app/logs 持久化到宿主機
     networks:
-      - kafka_kafka-net           # ✅ 讓它能讀 Kafka
-      - mongodb_default           # ✅ 讓它能連 Mongo
+      - kafka_kafka-net           # 讓它能讀 Kafka
+      - mongodb_default           # 讓它能連 Mongo
 
 networks:
   kafka_kafka-net:
