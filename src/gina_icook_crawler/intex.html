@@ -15,7 +15,7 @@ body {
     padding: 0;
     position: relative;
 
-    /* 🌥️ 淡淡的雲朵背景圖（不干擾內容） */
+    /* 背景圖（不干擾內容） */
     background-image: url('https://raw.githubusercontent.com/chunheart/assets/main/cloud_bg_soft.png');
     background-size: 450px;
     background-repeat: repeat;
@@ -125,7 +125,7 @@ th {
     50% { transform: translateY(-6px); }
 }
 
-/* ===== 🌍 小地球小助手 ===== */
+/* ===== 小地球小助手 ===== */
 .helper-wrap {
     position: fixed;
     right: 26px;
@@ -171,7 +171,7 @@ th {
     <div class="navItem" onclick="showPage(event,'about')">ℹ️ 關於餵食碳排小幫手</div>
 </div>
 
-<!-- 🎀 小地球小助手（右下角漂浮） -->
+<!--  小地球小助手（右下角漂浮） -->
 <div class="helper-wrap" onclick="toggleBubble()">
     <img src="earth_helper.png" class="helper-img">
     <div id="helperBubble" class="helper-bubble">請餵食 🍽️</div>
@@ -394,7 +394,6 @@ function showPage(evt, page) {
 
 /* ===========================================================
    ✨ CSV 解析邏輯
-   ※ 與你 MySQL 正規化後的輸出欄位完全相容
 =========================================================== */
 let allRows = [];
 let groupedByID = {};
