@@ -5,15 +5,15 @@ services:
     working_dir: /app
     restart: always
     volumes:
-      - ./scheduler.py:/app/scheduler.py      # ✅ 掛載：使用本機 scheduler.py
-      - ./data:/app/data                      # 🗂️ 保存每日 CSV / progress.json
-      - ./logs:/app/logs                      # 🧾 保存除錯 log
+      - ./scheduler.py:/app/scheduler.py      # 掛載：使用本機 scheduler.py
+      - ./data:/app/data                      # 保存每日 CSV / progress.json
+      - ./logs:/app/logs                      # 保存除錯 log
     command: >
       poetry run python scheduler.py
     networks:
-      - kafka_kafka-net                       # ✅ Kafka Compose 的實際網路名稱
+      - kafka_kafka-net                       # Kafka Compose 的實際網路名稱
 
 networks:
   kafka_kafka-net:
-    external: true                            # ✅ 使用 Kafka Compose 已存在的網路
+    external: true                            # 使用 Kafka Compose 已存在的網路
 
