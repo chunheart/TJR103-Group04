@@ -7,16 +7,16 @@ authors = ["Your Name <you@example.com>"]
 [tool.poetry.dependencies]
 python = "^3.11"
 
-# 🌐 網路請求與 HTML 解析
+# 網路請求與 HTML 解析
 requests = "^2.32.3"
 beautifulsoup4 = "^4.12.3"
 lxml = "^5.3.0"
 
-# 🧱 資料處理與時間控制
+# 資料處理與時間控制
 schedule = "^1.2.1"
 pytz = "^2024.1"
 
-# 📦 Kafka 整合
+# Kafka 整合
 kafka-python = "^2.0.2"
 
 # （可選）若之後想分析 CSV 或產生報表
