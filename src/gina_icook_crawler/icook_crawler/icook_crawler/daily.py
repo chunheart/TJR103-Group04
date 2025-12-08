@@ -1,14 +1,14 @@
 # -*- coding: utf-8 -*-
 """
-🍳 iCook 自動爬蟲 daily.py（v7.4 — 強化版智慧翻頁＋台灣時區）
+iCook 自動爬蟲 daily.py
 -------------------------------------------------------------
-✅ site 欄位固定值：icook（方便多站整合）
-✅ CSV 欄位固定順序（15 欄）
-✅ 支援 Excel-safe 模式（防止 0.5 → 日期）
-✅ Kafka / CSV 雙模式共用
-✅ 台灣時區（Asia/Taipei）
-✅ 強化智慧翻頁防呆：只要食譜內頁日期早於 since → 立即停止
-✅ 啟動時印出爬蟲時間（台灣時區）
+site 欄位固定值：icook（方便多站整合）
+CSV 欄位固定順序（15 欄）
+支援 Excel-safe 模式（防止 0.5 → 日期）
+Kafka / CSV 雙模式共用
+台灣時區（Asia/Taipei）
+強化智慧翻頁防呆：只要食譜內頁日期早於 since → 立即停止
+啟動時印出爬蟲時間（台灣時區）
 """
 
 import re
@@ -21,15 +21,15 @@ from urllib.parse import urljoin
 import requests
 import pandas as pd
 from bs4 import BeautifulSoup
-import pytz  # ✅ 台灣時區支援
+import pytz  # 台灣時區支援
 
 # ==============================
-# 🕓 台灣時區設定
+# 台灣時區設定
 # ==============================
 tz = pytz.timezone("Asia/Taipei")
 
 # ==============================
-# 🧩 Kafka 初始化
+# Kafka 初始化
 # ==============================
 try:
     from kafka import KafkaProducer
@@ -40,13 +40,13 @@ try:
     )
     TOPIC = "icook_recipes"
     KAFKA_OK = True
-    print("✅ Kafka 連線成功：啟用雙模式（Kafka + CSV）")
+    print(" Kafka 連線成功：啟用雙模式（Kafka + CSV）")
 except Exception as e:
     producer, TOPIC, KAFKA_OK = None, None, False
-    print(f"⚠️ Kafka 無法連線，改為純 CSV 模式：{e}")
+    print(f" Kafka 無法連線，改為純 CSV 模式：{e}")
 
 # ==============================
-# 🏗️ 基本設定
+# 基本設定
 # ==============================
 BASE = "https://icook.tw"
 HEADERS = {
@@ -63,7 +63,7 @@ else:
 PROGRESS_FILE = os.path.join(DATA_DIR, "progress.json")
 
 # ==============================
-# 📦 工具
+# 工具
 # ==============================
 def _text(el):
     return el.get_text(" ", strip=True) if el else ""
@@ -93,7 +93,7 @@ def backup_progress():
         if os.path.exists(backup_path):
             os.remove(backup_path)
         os.rename(PROGRESS_FILE, backup_path)
-        print(f"⚠️ [強制模式] 已忽略進度並覆蓋備份 → {os.path.basename(backup_path)}")
+        print(f"[強制模式] 已忽略進度並覆蓋備份 → {os.path.basename(backup_path)}")
 
 def daterange_inclusive(start: date, end: date):
     d = start
@@ -102,7 +102,7 @@ def daterange_inclusive(start: date, end: date):
         d += timedelta(days=1)
 
 # ==============================
-# ⚖️ 拆解重量
+# 拆解重量
 # ==============================
 def split_qty(qty_raw):
     if not qty_raw:
@@ -131,7 +131,7 @@ def split_qty(qty_raw):
     return f"{num}", unit
 
 # ==============================
-# 🕸️ 解析食譜
+# 解析食譜
 # ==============================
 def parse_recipe_info(html, url, debug=False):
     soup = BeautifulSoup(html, "lxml")
@@ -159,10 +159,10 @@ def parse_recipe_info(html, url, debug=False):
     return rid, title, author, pub, ingredients, servings, cook_time
 
 # ==============================
-# 🚀 主爬取流程
+# 主爬取流程
 # ==============================
 def crawl_latest_with_kafka(since, before, start_page=1, sleep=1.5, max_pages=20, debug=False, force=False, excel_safe=False):
-    print(f"🕒 爬蟲時間（台灣時區）: {datetime.now(tz).isoformat(timespec='seconds')}")
+    print(f"爬蟲時間（台灣時區）: {datetime.now(tz).isoformat(timespec='seconds')}")
     os.makedirs(DATA_DIR, exist_ok=True)
     since_d = datetime.strptime(since, "%Y-%m-%d").date()
     before_d = datetime.strptime(before, "%Y-%m-%d").date()
@@ -174,7 +174,7 @@ def crawl_latest_with_kafka(since, before, start_page=1, sleep=1.5, max_pages=20
         progress = load_progress()
         if progress["last_date"] == since:
             start_page = progress.get("last_page", 0) + 1
-            print(f"🔁 從進度接續第 {start_page} 頁")
+            print(f"從進度接續第 {start_page} 頁")
 
     stop_flag = False
 
@@ -203,9 +203,9 @@ def crawl_latest_with_kafka(since, before, start_page=1, sleep=1.5, max_pages=20
                 if pub_date > before_d:
                     continue
 
-                # ✅ 強化：若發現內頁日期早於 since → 立即停止整個爬蟲
+                # 強化：若發現內頁日期早於 since → 立即停止整個爬蟲
                 if pub_date < since_d:
-                    print(f"🛑 偵測到 {pub_date} 早於 {since}，提早停止翻頁。")
+                    print(f"偵測到 {pub_date} 早於 {since}，提早停止翻頁。")
                     stop_flag = True
                     break
 
@@ -254,19 +254,19 @@ def crawl_latest_with_kafka(since, before, start_page=1, sleep=1.5, max_pages=20
         df = pd.DataFrame(rows, dtype=str)[col_order]
         if excel_safe:
             df = df.map(lambda x: f"'{x}" if isinstance(x, str) and re.match(r"^[0-9.]+$", x) else x)
-            print("🧾 模式：Excel-safe CSV 模式（防止 Excel 日期誤轉）")
+            print("模式：Excel-safe CSV 模式（防止 Excel 日期誤轉）")
         else:
-            print("🚀 模式：一般 CSV 模式（正式版本）")
+            print("模式：一般 CSV 模式（正式版本）")
         df.to_csv(outpath, index=False, encoding="utf-8-sig", quoting=1)
         print(f"[saved] {d} -> {outpath} (rows={len(rows)})")
 
     if KAFKA_OK:
         producer.flush()
         producer.close()
-    print("🎉 完成。")
+    print("完成。")
 
 # ==============================
-# 🏁 主程式
+# 主程式
 # ==============================
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
